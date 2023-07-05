@@ -73,7 +73,7 @@ const DeputyApi: Resolvers = {
         hasMore: offset + limit < total,
         data: filterIds
           ? deputies.sort((a, b) => filterIds?.indexOf(a.webId) - filterIds?.indexOf(b.webId))
-          : deputies.sort((a, b) => a.name.localeCompare(b.name)),
+          : deputies,
       };
     },
     deputy: async (_parent, { id }) => {
