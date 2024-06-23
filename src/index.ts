@@ -1,22 +1,17 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
-/* eslint-disable no-console */
-
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { authMiddleware } from './express/auth';
-
-// *****************************************************************
-// IMPORTANT - you cannot include any models before migrating the DB
-// *****************************************************************
-
 import CONFIG from './config';
+import { expressMiddleware } from '@apollo/server/express4';
 
 import { logger } from './services/logger';
 
 import { connectDB } from './services/mongoose';
 import { appVersion } from './express/appVersion';
 import { applicationId } from './express/applicationId';
+import { context, server } from './services/graphql';
+import http from 'http';
 
 const main = async () => {
   // Connect to DB - this keeps the process running
@@ -24,57 +19,46 @@ const main = async () => {
   await connectDB();
 
   // Express Server
-  const server = express();
-
-  if (process.env.EXPRESS_STATUS === 'true') {
-    server.use(require('express-status-monitor')()); // eslint-disable-line global-require
-  }
-
-  // Cors
-  server.use(cors(/* corsOptions */));
-  /*
-  const corsOptions = {
-    origin: '*',
-    // credentials: true, // <-- REQUIRED backend setting
-  };
-  */
+  const app = express();
+  const httpServer = http.createServer(app);
 
   // Cookie parser to debug JWT easily
   if (CONFIG.DEBUG) {
-    server.use(cookieParser());
+    app.use(cookieParser());
   }
 
   // Authentification
   // Here several Models are included
-
-  server.use(authMiddleware);
+  app.use(authMiddleware);
 
   // add version to graphql context
-  server.use(appVersion);
+  app.use(appVersion);
 
   // add application id to graphql context
-  server.use(applicationId);
-
-  // Human Connection webhook
-  // const smHumanConnection = require('./express/webhooks/socialmedia/humanconnection'); // eslint-disable-line global-require
-  // server.get('/webhooks/human-connection/contribute', smHumanConnection);
+  app.use(applicationId);
 
   // Graphql
   // Here several Models are included for graphql
-  const graphql = require('./services/graphql'); // eslint-disable-line global-require
-  graphql.applyMiddleware({ app: server, path: CONFIG.GRAPHQL_PATH });
+  await server.start();
+
+  app.use(
+    '/graphql',
+    cors<cors.CorsRequest>(),
+    express.json(),
+    expressMiddleware(server, {
+      context,
+    }),
+  );
+
+  await new Promise<void>((resolve) => httpServer.listen({ port: 4000 }, resolve));
+  console.log(`🚀 Server ready at http://localhost:4000/graphql`);
 
   // Start Server
-  server.listen({ port: CONFIG.PORT }, () => {
-    logger.info(`🚀 Server ready at http://localhost:${CONFIG.PORT}${CONFIG.GRAPHQL_PATH}`, {
-      metaKey: 'metaValue',
-    });
-  });
-
-  // Start CronJobs (Bundestag Importer)
-  // Serveral Models are included
-  const cronJobs = require('./services/cronJobs'); // eslint-disable-line global-require
-  cronJobs();
+  // app.listen({ port: CONFIG.PORT }, () => {
+  //   logger.info(`🚀 Server ready at http://localhost:${CONFIG.PORT}${CONFIG.GRAPHQL_PATH}`, {
+  //     metaKey: 'metaValue',
+  //   });
+  // });
 };
 
 // Async Wrapping Function

@@ -10,7 +10,6 @@
     "serve": "node dist/index.js",
     "dev": "ts-node-dev -r dotenv/config src/index.ts --watch src/graphql",
     "generate": "graphql-codegen",
-    "apollo:codegen": "apollo client:codegen --endpoint=http://localhost:3000 --excludes=node_modules/* --target typescript --globalTypesFile=./__generated__/globalTypes.ts",
     "lint": "yarn lint:es && yarn lint:ts && yarn lint:exports",
     "lint:es": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
     "lint:ts": "tsc --noEmit",
@@ -21,11 +20,10 @@
     "test:integration": "jest --config jest.integration.config.js"
   },
   "dependencies": {
-    "@bmatei/apollo-prometheus-exporter": "^2.1.1",
+    "@apollo/server": "^4.10.4",
     "@democracy-deutschland/bundestag.io-definitions": "^1.0.0",
     "@democracy-deutschland/democracy-common": "0.2.12-alpha.3",
     "apn": "^2.2.0",
-    "apollo-server-express": "^2.9.12",
     "body-parser": "^1.19.0",
     "compare-versions": "^6.0.0-rc.1",
     "cookie-parser": "^1.4.4",
@@ -81,7 +79,6 @@
     "@types/winston": "^2.4.4",
     "@typescript-eslint/eslint-plugin": "^2.25.0",
     "@typescript-eslint/parser": "^2.25.0",
-    "apollo": "^2.33.9",
     "babel-jest": "^29.7.0",
     "dotenv": "^10.0.0",
     "eslint": "^6.8.0",
