@@ -5,6 +5,7 @@ import resolvers from '../../graphql/resolvers';
 import DataLoader from 'dataloader';
 import { votedLoader } from '../../graphql/resolvers/dataLoaders';
 import express from 'express';
+import { makeExecutableSchema } from '@graphql-tools/schema';
 
 // Models
 import {
@@ -20,16 +21,36 @@ import {
   DeputyModel,
 } from '@democracy-deutschland/democracy-common';
 import { Types } from 'mongoose';
+import { authDirective } from './authDirective';
 
 const app = express();
 
 app.get('/test', () => 'hallo');
 
+function getUser(token: string) {
+  const roles = ['UNKNOWN', 'USER', 'REVIEWER', 'ADMIN'];
+  return {
+    hasRole: (role: string) => {
+      const tokenIndex = roles.indexOf(token);
+      const roleIndex = roles.indexOf(role);
+      return roleIndex >= 0 && tokenIndex >= roleIndex;
+    },
+  };
+}
+
+const { authDirectiveTypeDefs, authDirectiveTransformer } = authDirective('auth', getUser);
+
+let schema = makeExecutableSchema({ typeDefs: [authDirectiveTypeDefs, typeDefs], resolvers });
+schema = authDirectiveTransformer(schema);
+
 export const server = new ApolloServer<BaseContext>({
-  resolvers,
-  typeDefs,
-  introspection: true, // process.env.NODE_ENV !== 'production',
+  // resolvers,
+  // typeDefs: [authDirectiveTypeDefs, typeDefs],
+  schema: schema,
+  introspection: process.env.NODE_ENV !== 'production',
 });
+
+console.log('process.env.NODE_ENV', process.env.NODE_ENV);
 
 export const context = async ({ req, res }) => ({
   // Connection

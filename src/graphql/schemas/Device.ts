@@ -34,8 +34,10 @@ export default `
     tags: [String]
   }
 
+  directive @veryfied on OBJECT | FIELD_DEFINITION
+
   type Query {
-    notificationSettings: NotificationSettings
+    notificationSettings: NotificationSettings @veryfied
   }
 
   type Mutation {
