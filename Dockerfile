@@ -1,4 +1,4 @@
-FROM node:16-alpine AS base_stage
+FROM node:18-alpine AS base_stage
 WORKDIR /app
 RUN corepack enable
 

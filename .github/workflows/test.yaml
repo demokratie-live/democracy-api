@@ -17,8 +17,6 @@ jobs:
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: latest
 
       - name: 📦 Cache dependencies
         uses: actions/cache@v4
@@ -37,13 +35,11 @@ jobs:
       - name: 🧪 Test
         run: pnpm test
 
-      - name: 🧪 Lint TypeScript (continue on error due to pre-existing issues)
-        run: pnpm lint:ts || echo "TypeScript errors detected - these are pre-existing issues unrelated to pnpm migration"
-        continue-on-error: true
+      - name: 🧪 Lint TypeScript
+        run: pnpm lint:ts
 
       - name: 🧪 Lint Exports 
         run: pnpm lint:exports
 
-      - name: 🏗️ Build (continue on error due to pre-existing TypeScript issues)
-        run: pnpm build || echo "Build failed due to pre-existing TypeScript errors unrelated to pnpm migration"
-        continue-on-error: true
+      - name: 🏗️ Build
+        run: pnpm build
