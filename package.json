@@ -5,6 +5,7 @@
   "author": "Manuel Ruck",
   "license": "Apache2",
   "private": true,
+  "packageManager": "pnpm@10.14.0",
   "scripts": {
     "build": "tsc",
     "serve": "node dist/index.js",

@@ -1,6 +1,6 @@
 FROM node:16-alpine AS base_stage
 WORKDIR /app
-RUN npm install -g pnpm
+RUN corepack enable
 
 FROM base_stage as build_stage
 WORKDIR /app
