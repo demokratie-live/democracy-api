@@ -68,7 +68,7 @@ docker-compose up
 ## Common Tasks and Troubleshooting
 
 ### Node.js Version Issues
-- **ALWAYS use `yarn install --ignore-engines`** -- Standard `yarn install` fails due to @apollo/federation requiring Node <17
+- **ALWAYS use `yarn install --ignore-engines`** -- Standard `yarn install` fails due to @apollo/federation requiring Node 
 - Current Node 20+ works fine for development despite package warnings
 
 ### Development Server Won't Start
