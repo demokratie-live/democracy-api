@@ -2,7 +2,7 @@
 
 import { PROCEDURE as PROCEDURE_DEFINITIONS } from '@democracy-deutschland/bundestag.io-definitions';
 import { IDeputy } from '@democracy-deutschland/democracy-common';
-import { Types, UpdateQuery } from 'mongoose';
+import { Types } from 'mongoose';
 import { MongooseFilterQuery } from 'mongoose';
 import CONFIG from '../../config';
 import PROCEDURE_STATES from '../../config/procedureStates';
@@ -10,6 +10,18 @@ import { Resolvers, VoteSelection } from '../../generated/graphql';
 import { logger } from '../../services/logger';
 import { GraphQlContext } from '../../types/graphqlContext';
 import ActivityApi from './Activity';
+
+// Type for Vote update operations - provides type safety while allowing MongoDB update operators
+interface VoteUpdateOperations {
+  $push?: {
+    voters?: {
+      voter: Types.ObjectId;
+    };
+  };
+  $inc?: {
+    [key: string]: number; // For dynamic vote count fields like 'votes.constituencies.$.yes'
+  };
+}
 
 const queryVotes = async (
   _parent: any,
@@ -366,7 +378,7 @@ const VoteApi: Resolvers = {
       }
 
       // Cast Vote
-      const voteUpdate: UpdateQuery<any> = {
+      const voteUpdate: VoteUpdateOperations = {
         $push: {
           voters: {
             voter: CONFIG.SMS_VERIFICATION ? phone._id : device._id,
