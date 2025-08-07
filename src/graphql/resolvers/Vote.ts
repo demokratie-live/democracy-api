@@ -2,7 +2,7 @@
 
 import { PROCEDURE as PROCEDURE_DEFINITIONS } from '@democracy-deutschland/bundestag.io-definitions';
 import { IDeputy } from '@democracy-deutschland/democracy-common';
-import { Types } from 'mongoose';
+import { Types, UpdateQuery } from 'mongoose';
 import { MongooseFilterQuery } from 'mongoose';
 import CONFIG from '../../config';
 import PROCEDURE_STATES from '../../config/procedureStates';
@@ -366,7 +366,7 @@ const VoteApi: Resolvers = {
       }
 
       // Cast Vote
-      const voteUpdate: any = {
+      const voteUpdate: UpdateQuery<any> = {
         $push: {
           voters: {
             voter: CONFIG.SMS_VERIFICATION ? phone._id : device._id,

@@ -6,6 +6,7 @@ import CONFIG from '../../config';
 import { createTokens, headerToken } from '../../express/auth';
 import { sendSMS, statusSMS } from '../../services/sms';
 import { Resolvers, NotificationSettings } from '../../generated/graphql';
+import { IProcedure } from '@democracy-deutschland/democracy-common';
 import { logger } from '../../services/logger';
 import { addToken } from './Device/addToken';
 import { isPhoneNumberValid } from '../../utils/validatePhone';
@@ -505,7 +506,7 @@ const DeviceApi: Resolvers = {
           device.notificationSettings.procedures.push(procedure._id);
         }
         await device.save();
-        return { ...procedure.toObject(), notify } as any;
+        return { ...procedure.toObject(), notify } as unknown as IProcedure;
       }
     },
   },

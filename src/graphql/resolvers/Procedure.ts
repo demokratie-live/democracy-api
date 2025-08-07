@@ -477,7 +477,7 @@ const ProcedureApi: Resolvers = {
         ...procedure.toObject(),
         notify: !!(device && device.notificationSettings.procedures.indexOf(procedure._id) > -1),
         verified: user ? user.isVerified() : false,
-      } as any;
+      } as unknown as IProcedure;
     },
 
     searchProceduresAutocomplete: async (parent, { term, period = 19 }, { ProcedureModel }) => {
@@ -617,7 +617,7 @@ const ProcedureApi: Resolvers = {
       return procedures.map((procedure) => ({
         ...procedure.toObject(),
         notify: true,
-      })) as any;
+      })) as unknown as IProcedure[];
     },
 
     showRecommendations: () => true,
