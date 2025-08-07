@@ -1,7 +1,7 @@
 /* eslint no-underscore-dangle: ["error", { "allow": ["_id"] }] */
 
 import { PROCEDURE as PROCEDURE_DEFINITIONS } from '@democracy-deutschland/bundestag.io-definitions';
-import { Vote, IDeputy } from '@democracy-deutschland/democracy-common';
+import { IDeputy } from '@democracy-deutschland/democracy-common';
 import { Types } from 'mongoose';
 import { MongooseFilterQuery } from 'mongoose';
 import CONFIG from '../../config';
@@ -366,7 +366,7 @@ const VoteApi: Resolvers = {
       }
 
       // Cast Vote
-      const voteUpdate: MongooseFilterQuery<Vote> = {
+      const voteUpdate: any = {
         $push: {
           voters: {
             voter: CONFIG.SMS_VERIFICATION ? phone._id : device._id,

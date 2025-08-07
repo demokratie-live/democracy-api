@@ -437,7 +437,7 @@ const ProcedureApi: Resolvers = {
           // Filter Andere(fraktionslos) from partyVotes array in result, rename party(CDU -> Union)
           return procedures.map((p) => {
             // MongoObject to JS Object
-            const procedure: IProcedure = p.toObject();
+            const procedure = p.toObject();
             // eslint-disable-next-line no-param-reassign
             if (procedure.voteResults) {
               procedure.voteResults.partyVotes = procedure.voteResults.partyVotes?.filter(
@@ -477,7 +477,7 @@ const ProcedureApi: Resolvers = {
         ...procedure.toObject(),
         notify: !!(device && device.notificationSettings.procedures.indexOf(procedure._id) > -1),
         verified: user ? user.isVerified() : false,
-      };
+      } as any;
     },
 
     searchProceduresAutocomplete: async (parent, { term, period = 19 }, { ProcedureModel }) => {
@@ -617,7 +617,7 @@ const ProcedureApi: Resolvers = {
       return procedures.map((procedure) => ({
         ...procedure.toObject(),
         notify: true,
-      }));
+      })) as any;
     },
 
     showRecommendations: () => true,

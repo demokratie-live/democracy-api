@@ -473,9 +473,10 @@ const DeviceApi: Resolvers = {
         );
         // TODO this additional read operation is also not nessecarily required
         // if the calculation is done serverside
-        device = await DeviceModel.findOne({ _id: device._id }).then((d) =>
-          d ? d.toObject() : null,
-        );
+        const updatedDevice = await DeviceModel.findOne({ _id: device._id });
+        if (updatedDevice) {
+          device = updatedDevice;
+        }
       }
 
       const result: NotificationSettings = {
@@ -504,7 +505,7 @@ const DeviceApi: Resolvers = {
           device.notificationSettings.procedures.push(procedure._id);
         }
         await device.save();
-        return { ...procedure.toObject(), notify };
+        return { ...procedure.toObject(), notify } as any;
       }
     },
   },
