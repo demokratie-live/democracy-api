@@ -13,24 +13,33 @@ jobs:
       - name: 🚀 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 18
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: 📦 Cache dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.cache/yarn
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-yarn-
+            ${{ runner.os }}-pnpm-
 
       - name: 📦 Install dependencies
-        run: yarn install
+        run: pnpm install
 
-      - name: 🧪 Lint
-        run: yarn lint
+      - name: 🧪 Lint ESLint
+        run: pnpm lint:es
 
       - name: 🧪 Test
-        run: yarn test
+        run: pnpm test
+
+      - name: 🧪 Lint TypeScript
+        run: pnpm lint:ts
+
+      - name: 🧪 Lint Exports 
+        run: pnpm lint:exports
 
       - name: 🏗️ Build
-        run: yarn build
+        run: pnpm build

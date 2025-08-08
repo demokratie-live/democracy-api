@@ -6,6 +6,7 @@ import CONFIG from '../../config';
 import { createTokens, headerToken } from '../../express/auth';
 import { sendSMS, statusSMS } from '../../services/sms';
 import { Resolvers, NotificationSettings } from '../../generated/graphql';
+import { IProcedure } from '@democracy-deutschland/democracy-common';
 import { logger } from '../../services/logger';
 import { addToken } from './Device/addToken';
 import { isPhoneNumberValid } from '../../utils/validatePhone';
@@ -473,9 +474,10 @@ const DeviceApi: Resolvers = {
         );
         // TODO this additional read operation is also not nessecarily required
         // if the calculation is done serverside
-        device = await DeviceModel.findOne({ _id: device._id }).then((d) =>
-          d ? d.toObject() : null,
-        );
+        const updatedDevice = await DeviceModel.findOne({ _id: device._id });
+        if (updatedDevice) {
+          device = updatedDevice;
+        }
       }
 
       const result: NotificationSettings = {
@@ -504,7 +506,7 @@ const DeviceApi: Resolvers = {
           device.notificationSettings.procedures.push(procedure._id);
         }
         await device.save();
-        return { ...procedure.toObject(), notify };
+        return { ...procedure.toObject(), notify } as unknown as IProcedure;
       }
     },
   },
