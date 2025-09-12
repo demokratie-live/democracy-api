@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Live Transcription</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    #output { white-space: pre-wrap; border: 1px solid #ccc; padding: 1rem; height: 200px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>Browser Microphone Transcription</h1>
+  <p>
+    <label>Deepgram API Key: <input id="apiKey" type="password" size="40" /></label>
+    <button id="start">Start</button>
+  </p>
+  <div id="output"></div>
+  <script>
+    const startBtn = document.getElementById('start');
+    const output = document.getElementById('output');
+    const apiKeyInput = document.getElementById('apiKey');
+
+    startBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        alert('Please enter your Deepgram API key.');
+        return;
+      }
+
+      const socket = new WebSocket(
+        'wss://api.deepgram.com/v1/listen?punctuate=true&diarize=true',
+        ['token', apiKey]
+      );
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const transcript = data.channel?.alternatives?.[0]?.transcript;
+        if (transcript) {
+          output.textContent = transcript;
+        }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recorder.addEventListener('dataavailable', async (e) => {
+        if (socket.readyState === WebSocket.OPEN && e.data.size > 0) {
+          socket.send(await e.data.arrayBuffer());
+        }
+      });
+      recorder.start(250);
+    });
+  </script>
+</body>
+</html>

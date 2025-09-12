@@ -51,6 +51,21 @@ job to finish.
 yarn lint
 ```
 
+## Audio transcription utility
+
+The repository includes a small script that transcribes an audio file and counts how many words each speaker says. It uses the [Deepgram](https://deepgram.com/) API for speech recognition and speaker diarization.
+
+```
+ts-node src/audio/speakerWordCounter.ts <audio-file> <DEEPGRAM_API_KEY>
+```
+
+### Live browser transcription
+
+To transcribe speech directly from a microphone in the browser, open
+`public/realtime-transcription.html` in a modern browser, enter your Deepgram API key
+and click **Start**. The spoken words will appear on screen almost instantly.
+
+
 ## Diagrams
 
 All sorts of visual Documentation.
