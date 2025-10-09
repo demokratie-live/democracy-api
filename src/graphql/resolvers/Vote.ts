@@ -6,7 +6,7 @@ import { Types } from 'mongoose';
 import { MongooseFilterQuery } from 'mongoose';
 import CONFIG from '../../config';
 import PROCEDURE_STATES from '../../config/procedureStates';
-import { Resolvers, VoteSelection } from '../../generated/graphql';
+import { Resolvers, ResolversParentTypes, VoteSelection } from '../../generated/graphql';
 import { logger } from '../../services/logger';
 import { GraphQlContext } from '../../types/graphqlContext';
 import ActivityApi from './Activity';
@@ -24,7 +24,7 @@ interface VoteUpdateOperations {
 }
 
 const queryVotes = async (
-  _parent: any,
+  _parent: ResolversParentTypes['Query'],
   { procedure, constituencies }: { procedure: string; constituencies: string[] | null | undefined },
   {
     VoteModel,
@@ -159,7 +159,7 @@ const queryVotes = async (
 const VoteApi: Resolvers = {
   Query: {
     // Used by App
-    votes: async (_parent: any, { procedure, constituencies }, { VoteModel, device, phone }) => {
+    votes: async (_parent: ResolversParentTypes['Query'], { procedure, constituencies }, { VoteModel, device, phone }) => {
       return queryVotes(_parent, { procedure, constituencies }, { VoteModel, device, phone });
     },
     // Used by Browserverion -> TODO Remove
