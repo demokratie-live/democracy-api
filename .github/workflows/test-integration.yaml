@@ -32,8 +32,19 @@ jobs:
               hostPort: 443
               protocol: TCP
           EOF
-      - name: 🐟 set kubectl context
-        run: echo "KUBE_CONTEXT=$(kubectl config current-context)" >> $GITHUB_ENV
+      - name: 🐟 Set kubectl context
+        run: |
+          CONTEXT=$(kubectl config current-context)
+          echo "KUBE_CONTEXT=$CONTEXT" >> $GITHUB_ENV
+          echo "✅ Kubectl context set to: $CONTEXT"
+
+      - name: ✅ Verify kubectl cluster access
+        run: |
+          echo "Verifying cluster access..."
+          kubectl cluster-info
+          kubectl get nodes
+          echo "✅ Cluster is accessible"
+
       - name: 📥 Checkout code
         uses: actions/checkout@v4
       - name: 🌱 Run integration test with garden.io
