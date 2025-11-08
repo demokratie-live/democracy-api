@@ -1,0 +1,87 @@
+name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yaml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yaml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🚀 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 🔧 Enable Corepack
+        run: corepack enable
+
+      - name: 📦 Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: 📦 Install dependencies
+        run: pnpm install
+
+      - name: 🏗️ Build project
+        run: pnpm build
+
+      - name: 🚀 Install Kind Cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          install_only: true
+
+      - name: 🐳 Create cluster with ingress
+        run: |
+          cat <<EOF | kind create cluster --config=-
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+            kubeadmConfigPatches:
+            - |
+              kind: InitConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  node-labels: "ingress-ready=true"
+            extraPortMappings:
+            - containerPort: 80
+              hostPort: 80
+              protocol: TCP
+            - containerPort: 443
+              hostPort: 443
+              protocol: TCP
+          EOF
+
+      - name: 🐟 Set kubectl context
+        run: echo "KUBE_CONTEXT=$(kubectl config current-context)" >> $GITHUB_ENV
+
+      - name: 🌱 Cache Garden CLI
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.garden
+            ~/.cache/garden
+          key: ${{ runner.os }}-garden-0.14.9
+          restore-keys: |
+            ${{ runner.os }}-garden-
+
+      - name: 🌱 Setup Garden.io
+        uses: garden-io/garden-action@v2
+        with:
+          garden-version: 0.14.9
+          command: version
