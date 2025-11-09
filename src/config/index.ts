@@ -46,8 +46,6 @@ const recommendedConfigs = {
 const optionalConfigs = {
   // Default Values given
   DEBUG: process.env.DEBUG === 'true',
-  ENGINE_API_KEY: process.env.ENGINE_API_KEY || null,
-  ENGINE_DEBUG_MODE: process.env.ENGINE_DEBUG_MODE === 'true',
   VOYAGER: process.env.VOYAGER || false,
   // Logging
   LOGGING_CONSOLE: process.env.LOGGING_CONSOLE,
