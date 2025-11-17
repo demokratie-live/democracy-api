@@ -4,7 +4,10 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import { json } from 'body-parser';
+import { expressMiddleware } from '@as-integrations/express4';
 import { authMiddleware } from './express/auth';
+import { apolloServer, graphqlContextFunction } from './services/graphql';
 
 // *****************************************************************
 // IMPORTANT - you cannot include any models before migrating the DB
@@ -22,6 +25,9 @@ const main = async () => {
   // Connect to DB - this keeps the process running
   // IMPORTANT - This is done before any Model is registered
   await connectDB();
+
+  // Start Apollo Server
+  await apolloServer.start();
 
   // Express Server
   const server = express();
@@ -59,10 +65,14 @@ const main = async () => {
   // const smHumanConnection = require('./express/webhooks/socialmedia/humanconnection'); // eslint-disable-line global-require
   // server.get('/webhooks/human-connection/contribute', smHumanConnection);
 
-  // Graphql
-  // Here several Models are included for graphql
-  const graphql = require('./services/graphql'); // eslint-disable-line global-require
-  graphql.applyMiddleware({ app: server, path: CONFIG.GRAPHQL_PATH });
+  // GraphQL Middleware (Apollo Server 4)
+  server.use(
+    CONFIG.GRAPHQL_PATH,
+    json(),
+    expressMiddleware(apolloServer, {
+      context: graphqlContextFunction,
+    }),
+  );
 
   // Start Server
   server.listen({ port: CONFIG.PORT }, () => {
