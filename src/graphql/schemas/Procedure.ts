@@ -51,7 +51,7 @@ type Procedure {
 
 type SearchProcedures {
   procedures: [Procedure!]!
-  autocomplete: [String!]!
+  autocomplete: [String!]! @deprecated(reason: "Always returns empty array, Elasticsearch removed")
 }
 
 input ProcedureFilter {
@@ -98,7 +98,7 @@ type Query {
   proceduresById(ids: [String!]!, pageSize: Int, offset: Int): [Procedure!]!
   proceduresByIdHavingVoteResults(procedureIds: [String!], period: Int, timespan: VotedTimeSpan, pageSize: Int, offset: Int, filter: ProcedureWOMFilter): ProceduresHavingVoteResults!
   notifiedProcedures: [Procedure!]!
-  searchProcedures(term: String!): [Procedure!]! @deprecated(reason: "use searchProceduresAutocomplete")
+  searchProcedures(term: String!): [Procedure!]! @deprecated(reason: "Elasticsearch removed, use searchProceduresAutocomplete")
   searchProceduresAutocomplete(term: String!, period: Int): SearchProcedures!
   votedProcedures: [Procedure!]!
   proceduresWithVoteResults(procedureIds: [String!]!): [Procedure!]!

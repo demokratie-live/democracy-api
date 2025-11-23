@@ -1,14 +1,9 @@
-/* eslint no-underscore-dangle: ["error", { "allow": ["_id"] }] */
-import _ from 'lodash';
-
 import { PROCEDURE as PROCEDURE_DEFINITIONS } from '@democracy-deutschland/bundestag.io-definitions';
 import { IProcedure } from '@democracy-deutschland/democracy-common';
 import { FilterQuery } from 'mongoose';
 import { parseResolveInfo } from 'graphql-parse-resolve-info';
 import PROCEDURE_STATES from '../../config/procedureStates';
 import CONFIG from '../../config';
-
-import elasticsearch from '../../services/search';
 
 import { Resolvers, ListType, ProcedureType } from '../../generated/graphql';
 import { recommendedProcedures } from './Procedures/recommendations.data';
@@ -490,109 +485,17 @@ const ProcedureApi: Resolvers = {
       }
 
       const mongoSearchProcedures = await ProcedureModel.find({ $text: { $search: term }, period });
-      if (mongoSearchProcedures.length > 0) {
-        return {
-          procedures: mongoSearchProcedures,
-          autocomplete,
-        };
-      }
-
-      const { hits } = await elasticsearch.search<{ procedureId: string }>({
-        index: 'procedures',
-        type: 'procedure',
-        body: {
-          query: {
-            function_score: {
-              query: {
-                bool: {
-                  must: [
-                    {
-                      term: { period },
-                    },
-                    {
-                      query_string: {
-                        query: "type:'Antrag' OR type:'Gesetzgebung'",
-                      },
-                    },
-                    {
-                      multi_match: {
-                        query: `*${term}*`,
-                        fields: ['title^3', 'tags^2.5', 'abstract^2'],
-                        fuzziness: 'AUTO',
-                        prefix_length: 3,
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-
-          suggest: {
-            autocomplete: {
-              text: `${term}`,
-              term: {
-                field: 'title',
-                suggest_mode: 'popular',
-              },
-            },
-          },
-        },
-      });
-
-      // prepare procedures
-      const procedureIds = hits.hits.map(({ _source: { procedureId } }) => procedureId);
-      const procedures = await ProcedureModel.find({ procedureId: { $in: procedureIds }, period });
-
-      // prepare autocomplete
-      // if (suggest.autocomplete[0]) {
-      //   autocomplete = suggest.autocomplete[0].options.map(({ text }) => text);
-      // }
       return {
-        procedures: _.sortBy(procedures, ({ procedureId }) => procedureIds.indexOf(procedureId)) || [],
-        autocomplete: [],
+        procedures: mongoSearchProcedures,
+        autocomplete,
       };
     },
 
     // DEPRECATED
     searchProcedures: async (parent, { term }, { ProcedureModel }) => {
       // logger.graphql('Procedure.query.searchProcedures');
-      const { hits } = await elasticsearch.search<{ procedureId: string }>({
-        index: 'procedures',
-        type: 'procedure',
-        body: {
-          query: {
-            function_score: {
-              query: {
-                bool: {
-                  must: [
-                    {
-                      term: { period: 19 },
-                    },
-                    {
-                      query_string: {
-                        query: "type:'Antrag' OR type:'Gesetzgebung'",
-                      },
-                    },
-                    {
-                      multi_match: {
-                        query: `*${term}*`,
-                        fields: ['title^3', 'tags^2.5', 'abstract^2'],
-                        fuzziness: 'AUTO',
-                        prefix_length: 3,
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      });
-
-      // prepare procedures
-      const procedureIds = hits.hits.map(({ _source: { procedureId } }) => procedureId);
-      return ProcedureModel.find({ procedureId: { $in: procedureIds } });
+      // Elasticsearch removed - returning empty array for backward compatibility
+      return [];
     },
 
     notifiedProcedures: async (parent, args, { device, ProcedureModel }): Promise<any> => {

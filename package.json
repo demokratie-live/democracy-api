@@ -1,6 +1,6 @@
 {
   "name": "democracy-server",
-  "version": "0.2.80",
+  "version": "0.2.81-alpha-refactor-remove-elasticsearch.0",
   "main": "dist/index.js",
   "author": "Manuel Ruck",
   "license": "Apache2",
@@ -40,7 +40,6 @@
     "cors": "^2.8.4",
     "cron": "^1.7.2",
     "dataloader": "^2.0.0",
-    "elasticsearch": "^16.5.0",
     "express": "^4.17.1",
     "express-status-monitor": "^1.2.7",
     "graphql": "^14.5.8",
@@ -69,7 +68,6 @@
     "@graphql-codegen/typescript-resolvers": "^4.1.0",
     "@types/cookie-parser": "^1.4.2",
     "@types/cron": "^1.7.2",
-    "@types/elasticsearch": "^5.0.36",
     "@types/graphql-date": "^1.0.5",
     "@types/jsonwebtoken": "^8.3.8",
     "@types/lodash": "^4.14.149",

@@ -5,7 +5,7 @@ type SearchTerm {
 }
 
 type Query {
-  mostSearched: [SearchTerm!]!
+  mostSearched: [SearchTerm!]! @deprecated(reason: "Always returns empty array, Elasticsearch removed")
 }
  
 type Mutation {
