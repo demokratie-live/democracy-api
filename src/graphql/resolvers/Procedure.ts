@@ -1,6 +1,3 @@
-/* eslint no-underscore-dangle: ["error", { "allow": ["_id"] }] */
-import _ from 'lodash';
-
 import { PROCEDURE as PROCEDURE_DEFINITIONS } from '@democracy-deutschland/bundestag.io-definitions';
 import { IProcedure } from '@democracy-deutschland/democracy-common';
 import { FilterQuery } from 'mongoose';
