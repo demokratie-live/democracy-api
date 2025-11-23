@@ -157,7 +157,6 @@ src/
 ### Required Services
 
 - **MongoDB**: Primary database, required for development
-- **Elasticsearch**: Configured but not required for basic startup
 - **bundestag.io**: External service for importing parliamentary data (optional for development)
 
 ### Key Features
