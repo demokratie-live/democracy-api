@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.81 (2026-10-01)
+
+
+### Bug Fixes
+
+* **auth:** handle duplicate key on parallel device signup ([779d3c7](https://github.com/demokratie-live/democracy-api/commit/779d3c71c16eba079e4b3a9dfae5f973aaf17756))
+
 ### 0.2.80 (2025-11-23)
 
 ### 0.2.80-alpha-chore-eslint-9.0 (2025-11-23)
