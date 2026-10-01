@@ -84,7 +84,40 @@ export const headerToken = async ({
   }
 };
 
+const isDuplicateKeyError = (err: unknown) => (err as { code?: number } | null)?.code === 11000;
+
+// Parallel first requests of a new device can race each other (also across pods).
+// The loser of the race continues with the document the winner has created.
+const saveOrFindExisting = async <T extends { save: () => Promise<T> }>(
+  doc: T,
+  findExisting: () => Promise<T | null>,
+): Promise<T> => {
+  try {
+    return await doc.save();
+  } catch (err) {
+    if (!isDuplicateKeyError(err)) {
+      throw err;
+    }
+    const existing = await findExisting();
+    if (!existing) {
+      throw err;
+    }
+    return existing;
+  }
+};
+
 export const authMiddleware = async (req: ExpressReqContext, res: Response, next: NextFunction) => {
+  // Express 4 does not catch rejected promises of async middlewares, they would end the process
+  try {
+    await authenticate(req, res);
+  } catch (err) {
+    logger.error(err);
+    return next(err);
+  }
+  next();
+};
+
+const authenticate = async (req: ExpressReqContext, res: Response) => {
   logger.graphql(`authMiddleware`, {
     cookies: req.cookies,
     headers: req.headers,
@@ -192,25 +225,21 @@ export const authMiddleware = async (req: ExpressReqContext, res: Response, next
       user = await UserModel.findOne({ device: device, phone: phone });
       if (!user) {
         // logger.jwt('JWT: Create new User');
+        const hashedDeviceHash = crypto.createHash('sha256').update(deviceHash).digest('hex');
 
-        device = await DeviceModel.findOne({
-          deviceHash: crypto.createHash('sha256').update(deviceHash).digest('hex'),
-        });
+        device = await DeviceModel.findOne({ deviceHash: hashedDeviceHash });
         // Device
         if (!device) {
-          device = new DeviceModel({
-            deviceHash: crypto.createHash('sha256').update(deviceHash).digest('hex'),
-          });
-          await device.save().catch((e) => {
-            logger.error("Couldn't save Device");
-            logger.error(e);
-          });
+          device = await saveOrFindExisting(new DeviceModel({ deviceHash: hashedDeviceHash }), () =>
+            DeviceModel.findOne({ deviceHash: hashedDeviceHash }).exec(),
+          );
         }
 
         // Create user
         logger.debug('Create new User');
-        user = new UserModel({ device, phone });
-        await user.save();
+        user = await saveOrFindExisting(new UserModel({ device, phone }), () =>
+          UserModel.findOne({ device, phone }).exec(),
+        );
       }
       // logger.jwt(`JWT: Token New for User: ${user._id}`);
       const [createToken, createRefreshToken] = await createTokens(user._id);
@@ -234,5 +263,4 @@ export const authMiddleware = async (req: ExpressReqContext, res: Response, next
     req.device = device;
     req.phone = phone;
   }
-  next();
 };
