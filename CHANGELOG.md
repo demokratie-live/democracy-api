@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.82 (2026-11-04)
+
+
+### Bug Fixes
+
+* update node to 22.23.4 ([#36](https://github.com/demokratie-live/democracy-api/issues/36)) ([e1c7494](https://github.com/demokratie-live/democracy-api/commit/e1c7494b92a1c5cf1b9de912eb327acbde6f6854))
+
 ### 0.2.81 (2026-10-01)
 
 
