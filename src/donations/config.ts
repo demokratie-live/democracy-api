@@ -133,8 +133,8 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
     minAmountCents: parseInteger(env, 'DONATION_MIN_CENTS', 500, problems),
     maxAmountCents: parseInteger(env, 'DONATION_MAX_CENTS', 100000, problems),
     presets: {
-      one_time: parseIntegerList(env, 'DONATION_PRESETS_ONE_TIME', [1000, 2500, 5000, 10000], problems),
-      monthly: parseIntegerList(env, 'DONATION_PRESETS_MONTHLY', [500, 1000, 1500, 2500], problems),
+      one_time: parseIntegerList(env, 'DONATION_PRESETS_ONE_TIME', [1000, 2500, 5000, 10000, 25000], problems),
+      monthly: parseIntegerList(env, 'DONATION_PRESETS_MONTHLY', [500, 1000, 1500, 2500, 5000], problems),
     },
     fees: {
       cardPct: parseNumber(env, 'DONATION_FEE_CARD_PCT', 1.5, problems),

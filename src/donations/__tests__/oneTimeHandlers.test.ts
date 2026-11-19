@@ -47,7 +47,7 @@ describe('Webhook-Handler Einzelspende', () => {
     expect(mailer.send).toHaveBeenCalledTimes(1);
     const mail = mailer.send.mock.calls[0][0] as { to: string; subject: string; text: string };
     expect(mail.to).toBe('spender@example.org');
-    expect(mail.subject).toBe('Danke für deine Spende an DEMOCRACY');
+    expect(mail.subject).toBe('Danke für Deine Spende an DEMOCRACY');
     expect(mail.text).toMatch(/Betrag:\s+10,41\s€ \(inklusive 0,41\s€ freiwillig übernommener Zahlungsgebühren\)/);
     expect(mail.text).toContain('Zahlungsart: Apple Pay');
     expect(mail.text).toContain('nicht um einen Mitgliedsbeitrag');

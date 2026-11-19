@@ -28,7 +28,7 @@ describe('Mail-Vorlagen', () => {
     expect(text).toContain('Spende (Zuwendung ohne Gegenleistung), nicht um einen Mitgliedsbeitrag');
     expect(text).toContain('Für Spenden bis 300 €');
     expect(text).toContain(base.legal.simplifiedReceiptUrl);
-    expect(text).toContain('vollständigen Namen und deine');
+    expect(text).toContain('Deinen vollständigen Namen und Deine');
     expect(text).not.toContain('inklusive');
   });
 

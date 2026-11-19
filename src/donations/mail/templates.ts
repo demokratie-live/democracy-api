@@ -21,7 +21,7 @@ const footer = (config: ReceiptConfig) =>
     '',
     '—',
     `${config.receipt.organization} · Datenschutz: ${config.legal.privacyUrl}`,
-    'Diese E-Mail wurde automatisch versendet, weil bei deiner Spende diese Adresse angegeben wurde.',
+    'Diese E-Mail wurde automatisch versendet, weil bei Deiner Spende diese Adresse angegeben wurde.',
   ].join('\n');
 
 const taxSection = (config: ReceiptConfig) =>
@@ -33,12 +33,12 @@ const taxSection = (config: ReceiptConfig) =>
       ? `  Freistellung: ${config.receipt.exemption}`
       : `  Freistellung: siehe Nachweis der Gemeinnützigkeit – ${config.legal.nonprofitProofUrl}`,
     '',
-    'Für Spenden bis 300 € genügt dem Finanzamt dein Zahlungsnachweis (z. B. Kontoauszug, Kreditkarten-',
+    'Für Spenden bis 300 € genügt dem Finanzamt Dein Zahlungsnachweis (z. B. Kontoauszug, Kreditkarten-',
     'oder PayPal-Abrechnung) zusammen mit dieser Bestätigung und unserem vereinfachten Zuwendungsnachweis:',
     config.legal.simplifiedReceiptUrl,
     '',
     'Du brauchst eine Zuwendungsbestätigung, etwa für Spenden über 300 € oder als Sammelbestätigung für',
-    'das ganze Jahr? Antworte einfach auf diese E-Mail und nenne uns deinen vollständigen Namen und deine',
+    'das ganze Jahr? Antworte einfach auf diese E-Mail und nenne uns Deinen vollständigen Namen und Deine',
     'Anschrift.',
   ].join('\n');
 
@@ -70,7 +70,7 @@ export const oneTimeConfirmationMail = ({
   const text = [
     'Hallo,',
     '',
-    'vielen Dank für deine Spende! Damit hilfst du, DEMOCRACY unabhängig, überparteilich und werbefrei',
+    'vielen Dank für Deine Spende! Damit hilfst Du, DEMOCRACY unabhängig, überparteilich und werbefrei',
     'zu halten.',
     '',
     'Deine Spende',
@@ -84,7 +84,7 @@ export const oneTimeConfirmationMail = ({
     footer(config),
   ].join('\n');
 
-  return { to, subject: 'Danke für deine Spende an DEMOCRACY', text };
+  return { to, subject: 'Danke für Deine Spende an DEMOCRACY', text };
 };
 
 interface SepaFailure {
@@ -98,11 +98,11 @@ export const sepaFailedMail = ({ to, chargedAmountCents, createdAt, config }: Se
   const text = [
     'Hallo,',
     '',
-    `leider konnte deine Lastschrift über ${formatEuro(chargedAmountCents)} vom ${formatDate(createdAt)}`,
+    `leider konnte Deine Lastschrift über ${formatEuro(chargedAmountCents)} vom ${formatDate(createdAt)}`,
     'nicht eingezogen werden – zum Beispiel wegen fehlender Kontodeckung oder einer abgelehnten Lastschrift.',
     'Der Betrag wurde nicht abgebucht bzw. wieder zurückgebucht.',
     '',
-    'Wenn du es noch einmal versuchen möchtest, kannst du jederzeit in der DEMOCRACY-App spenden oder',
+    'Wenn Du es noch einmal versuchen möchtest, kannst Du jederzeit in der DEMOCRACY-App spenden oder',
     'per Überweisung:',
     `  Kontoinhaber: ${config.bankTransfer.holder}`,
     `  IBAN:         ${config.bankTransfer.iban}`,

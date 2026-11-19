@@ -27,7 +27,7 @@ const MESSAGES: Record<DonationErrorCode, string> = {
   invalid_request: 'Die Anfrage ist ungültig.',
   amount_out_of_range: 'Der Betrag liegt außerhalb des erlaubten Bereichs.',
   invalid_email: 'Bitte gib eine gültige E-Mail-Adresse an.',
-  email_required: 'Für eine monatliche Spende brauchen wir deine E-Mail-Adresse.',
+  email_required: 'Für eine monatliche Spende brauchen wir Deine E-Mail-Adresse.',
   invalid_platform: 'Unbekannte Plattform.',
   invalid_payment_method: 'Die Zahlungsart ist ungültig.',
   payment_method_not_allowed: 'Diese Zahlungsart ist hierfür leider nicht verfügbar.',

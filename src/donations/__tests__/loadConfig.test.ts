@@ -27,7 +27,7 @@ describe('loadDonationConfig', () => {
     expect(config.minAmountCents).toBe(500);
     expect(config.maxAmountCents).toBe(100000);
     expect(config.defaultInterval).toBe('monthly');
-    expect(config.presets.monthly).toEqual([500, 1000, 1500, 2500]);
+    expect(config.presets.monthly).toEqual([500, 1000, 1500, 2500, 5000]);
     expect(config.stripe.paymentMethodConfigurationId).toBeNull();
     expect(config.fees).toEqual({ cardPct: 1.5, cardFixedCents: 25, sepaFixedCents: 35, billingPct: 0.7 });
     expect(config.bankTransfer.iban).toBe('DE83 2605 0001 0056 1290 91');
