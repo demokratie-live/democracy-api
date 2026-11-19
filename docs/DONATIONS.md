@@ -12,8 +12,25 @@ Spezifikation, Plan und Contracts liegen im Client-Repo:
 
 ## 1. Umgebungsvariablen
 
-Siehe `.env.example` (Abschnitt „Donations"). Geheim (Kubernetes-Secret): `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `SMTP_URL`. Alles andere über die ConfigMap.
+Siehe `.env.example` (Abschnitt „Donations").
+
+- **Geheim** – ins Cluster-Secret `democracy-api-secrets` (wird nicht in Git gepflegt):
+  `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_URL`. Beispiel (Werte nie in die Shell-History
+  schreiben, z. B. aus einer Datei lesen):
+
+  ```bash
+  kubectl -n democracy-internal create secret generic democracy-api-secrets \
+    --from-env-file=donations.secret.env --dry-run=client -o yaml | kubectl apply -f -
+  ```
+
+  Achtung: `create secret … | apply` ersetzt das ganze Secret – bestehende Schlüssel in die Datei
+  übernehmen oder einzeln mit `kubectl patch` ergänzen.
+- **Öffentlich** – in die ConfigMap (Repo `infrastructure`,
+  `kustomize/overlays/<stage>/configs/democracy-api.env`): `DONATIONS_ENABLED`,
+  `STRIPE_PUBLISHABLE_KEY`, `STRIPE_DONATION_PRODUCT_ID`, `STRIPE_PORTAL_LOGIN_URL`, optionale
+  `DONATION_*`-Werte.
+- **Ingress**: `kustomize/overlays/<stage>/yamls/donations-ingress.yaml` leitet `/donations` ohne
+  Access-Log an die API (keine IP-Protokollierung von Spenden-Requests).
 
 | Stage | Stripe-Modus | Webhook-URL |
 |---|---|---|
@@ -149,6 +166,10 @@ im Client-Repo: `docs/deployment/IOS.md` und `docs/deployment/ANDROID.md` (Absch
 
 - **Monitoring:** Webhook-Fehler, Rückbuchungen (`charge.dispute.created`) und Erstattungen gehen
   als Warnung an den Discord-Logger (nur Stripe-IDs).
+- **Rate-Limit:** 10 Zahlungsversuche je 10 Minuten und Client, gezählt **pro Pod** im Speicher
+  (Produktion: 10 Replicas → im ungünstigsten Fall bis zu 100). Der Zählerschlüssel ist ein
+  gesalzener IP-Hash; IPs werden nicht gespeichert. Hauptschutz gegen Card-Testing sind Stripe Radar
+  und der Mindestbetrag; bei Missbrauch Radar-Regeln verschärfen.
 - **Monatsexport für die Buchhaltung:** folgt mit Task T061.
 - **Formale Zuwendungs-/Sammelbestätigung auf Anfrage:** folgt mit Task T060.
 - **DonorBox:** nutzt dasselbe Stripe-Konto. Alle App-Objekte tragen

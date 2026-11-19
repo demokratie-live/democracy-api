@@ -18,3 +18,5 @@ data:
   AUTH_JWT_TTL: 1m
   AUTH_JWT_REFRESH_TTL: 5m
   JWT_BACKWARD_COMPATIBILITY: "true"
+  # In-App-Spenden (src/donations): lokal aus; Testmodus-Schlüssel über .env bzw. Secret setzen
+  DONATIONS_ENABLED: "false"

@@ -42,6 +42,15 @@ const main = async () => {
     server.use(cookieParser());
   }
 
+  // In-App-Spenden (specs/001-in-app-donations im democracy-client-Repo).
+  // Bewusst VOR der Auth-Middleware: Spenden-Requests bekommen nie Nutzer-/Geräte-Kontext und
+  // landen nicht im IP-Debug-Log der Auth-Middleware (Datenschutz, keine Verknüpfung mit Abstimmungen).
+  // Dynamischer Import, weil das Modul Mongoose-Modelle registriert (erst nach connectDB erlaubt).
+  // `trust proxy`: genau ein Proxy (Ingress) vor dem Server, damit das Rate-Limit req.ip korrekt sieht.
+  server.set('trust proxy', 1);
+  const { createDonationsRouterFromEnv } = await import('./donations');
+  server.use('/donations/v1', createDonationsRouterFromEnv());
+
   // Authentification
   // Here several Models are included
 
