@@ -212,8 +212,44 @@ describe('POST /donations/v1/monthly (T037)', () => {
 
     const response = await post(body);
     expect(response.status).toBe(200);
-    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
     expect(subscribers.entries.get(KEY_HASH)?.stripeSubscriptionId).toBe('sub_new');
+  });
+
+  it('kündigt nicht, wenn die überlappende Wiederholung dieselbe Subscription schon zugeordnet vorfindet', async () => {
+    const stripe = fakeStripe();
+    const { post, subscribers } = await start(stripe);
+    // Der ursprüngliche Request hat zwischen Lesen und Zuordnen dieselbe Subscription verknüpft.
+    const original = subscribers.linkSubscription.bind(subscribers);
+    subscribers.linkSubscription = async (id, subscriptionId) => {
+      await original(id, subscriptionId, null);
+      return original(id, subscriptionId, null);
+    };
+
+    const response = await post(body);
+    expect(response.status).toBe(200);
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it('legt einen neuen Customer an, wenn der bisherige bei Stripe gelöscht wurde', async () => {
+    const stripe = fakeStripe({ existingStatus: 'canceled' });
+    stripe.customers.update.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'resource_missing' }));
+    const { post, subscribers } = await start(stripe, [
+      { ...existingEntry('sub_old'), endedAt: new Date('2026-10-01') },
+    ]);
+
+    const response = await post(body);
+    expect(response.status).toBe(200);
+    expect(stripe.customers.create).toHaveBeenCalledTimes(1);
+    expect(subscribers.entries.get(KEY_HASH)?.stripeCustomerId).toBe('cus_new');
+    expect(stripe.subscriptions.create.mock.calls[0][0]).toMatchObject({ customer: 'cus_new' });
+  });
+
+  it('beendet eine zum Periodenende gekündigte Dauerspende sofort, sobald die neue angelegt ist', async () => {
+    const stripe = fakeStripe({ existingStatus: 'active', existingCancelAtPeriodEnd: true });
+    const { post } = await start(stripe, [existingEntry('sub_old')]);
+
+    expect((await post(body)).status).toBe(200);
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith('sub_old');
   });
 
   it('verwirft die eigene Subscription, wenn ein paralleler Request schneller war', async () => {

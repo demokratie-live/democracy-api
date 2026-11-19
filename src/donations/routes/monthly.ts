@@ -52,12 +52,16 @@ export const monthlyRoute =
 
       try {
         const existing = await subscribers.findByKeyHash(keyHash);
+        // Eine zum Periodenende gekündigte, noch laufende Dauerspende wird nach dem Anlegen der neuen
+        // sofort beendet – sonst ließe sie sich im Kundenportal reaktivieren (doppelte Abbuchung).
+        let supersededId: string | null = null;
         if (existing?.stripeSubscriptionId && !existing.endedAt) {
           const current = await stripe.subscriptions.retrieve(existing.stripeSubscriptionId);
-          const scheduledToEnd = current.cancel_at_period_end || current.cancel_at !== null;
+          const scheduledToEnd = current.cancel_at_period_end || Boolean(current.cancel_at);
           if (BLOCKING_STATUSES.has(current.status) && !scheduledToEnd) {
             throw new DonationError('subscription_exists');
           }
+          if (BLOCKING_STATUSES.has(current.status) && scheduledToEnd) supersededId = current.id;
           // Wiederholung desselben Requests (Antwort ging verloren): nicht kündigen – Stripe liefert
           // für denselben Idempotency-Key ohnehin dieselbe Subscription zurück.
           if (current.status === 'incomplete' && current.metadata?.request_id !== idempotencyKey) {
@@ -68,18 +72,28 @@ export const monthlyRoute =
 
         const email = input.email as string;
         let subscriber = existing;
-        if (subscriber) {
-          // Der Schlüssel gehört zu diesem Customer – eine geänderte E-Mail übernehmen.
-          await stripe.customers.update(
-            subscriber.stripeCustomerId,
-            { email },
-            { idempotencyKey: `${idempotencyKey}:customer-email` },
-          );
-        } else {
-          const created = await stripe.customers.create(
+        const createCustomer = () =>
+          stripe.customers.create(
             { email, preferred_locales: ['de'], metadata: { source: DONATION_SOURCE, kind: 'monthly' } },
             { idempotencyKey: `${idempotencyKey}:customer` },
           );
+        if (subscriber) {
+          // Der Schlüssel gehört zu diesem Customer – eine geänderte E-Mail übernehmen. Wurde der
+          // Customer bei Stripe gelöscht (z. B. Löschanfrage), bekommt der Schlüssel einen neuen.
+          try {
+            await stripe.customers.update(
+              subscriber.stripeCustomerId,
+              { email },
+              { idempotencyKey: `${idempotencyKey}:customer-email` },
+            );
+          } catch (error) {
+            if ((error as { code?: string })?.code !== 'resource_missing') throw error;
+            const created = await createCustomer();
+            await subscribers.setCustomer(subscriber.id, created.id);
+            subscriber = { ...subscriber, stripeCustomerId: created.id };
+          }
+        } else {
+          const created = await createCustomer();
           subscriber = await subscribers.insert(keyHash, created.id);
         }
         const customer = subscriber.stripeCustomerId;
@@ -125,6 +139,14 @@ export const monthlyRoute =
           await stripe.subscriptions.cancel(subscription.id).catch(() => undefined);
           donationLog.warn('Paralleler Request: Dauerspende verworfen', { stripeId: subscription.id });
           throw new DonationError('idempotency_conflict');
+        }
+        if (supersededId && supersededId !== subscription.id) {
+          await stripe.subscriptions.cancel(supersededId).catch((error: unknown) => {
+            donationLog.warn('Gekündigte Dauerspende konnte nicht sofort beendet werden', {
+              stripeId: supersededId ?? undefined,
+              code: stripeErrorCode(error),
+            });
+          });
         }
 
         const invoice = subscription.latest_invoice as Stripe.Invoice | null;

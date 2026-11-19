@@ -124,22 +124,31 @@ const createDisabledRouter = (): Router => {
 };
 
 /**
- * Baut das Modul aus den Umgebungsvariablen. Eine ungültige Spenden-Konfiguration darf nie die ganze
- * API (Abstimmungen, GraphQL) lahmlegen: Dann wird das Modul deaktiviert und der Fehler geloggt.
+ * Baut das Modul aus den Umgebungsvariablen.
+ *
+ * - Modul eingeschaltet (`DONATIONS_ENABLED=true`) und Konfiguration ungültig → Fehler (fail fast): Die
+ *   Pods starten nicht, der Rollout bleibt stehen, die alten Pods laufen weiter. So bleiben Webhooks und
+ *   Kündigen bestehender Dauerspenden erreichbar, statt still abgeschaltet zu werden.
+ * - Modul ausgeschaltet → eine fehlerhafte Spenden-Variable darf die API (Abstimmungen) nicht lahmlegen:
+ *   Modul bleibt aus, der Fehler wird geloggt.
  */
-export const createDonationsRouterFromEnv = (): Router => {
+export const createDonationsRouterFromEnv = (env: Record<string, string | undefined> = process.env): Router => {
   try {
-    return buildFromEnv();
+    return buildFromEnv(env);
   } catch (error) {
-    donationLog.error('Spendenmodul deaktiviert – Konfiguration ungültig', {
-      code: error instanceof DonationConfigError ? error.problems.join('; ') : ((error as Error)?.name ?? 'unknown'),
+    if (env.DONATIONS_ENABLED === 'true') throw error;
+    donationLog.error('Spendenmodul bleibt aus – Konfiguration ungültig', {
+      code:
+        error instanceof DonationConfigError
+          ? error.problems.join('; ')
+          : `${(error as Error)?.name ?? 'Error'}: ${String((error as Error)?.message ?? '').slice(0, 200)}`,
     });
     return createDisabledRouter();
   }
 };
 
-const buildFromEnv = (): Router => {
-  const config = loadDonationConfig();
+const buildFromEnv = (env: Record<string, string | undefined>): Router => {
+  const config = loadDonationConfig(env);
   const stripe = config.stripe.secretKey ? createStripeClient(config.stripe.secretKey) : null;
   if (config.enabled && !config.receipt.exemption) {
     donationLog.warn(

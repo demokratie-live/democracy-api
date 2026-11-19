@@ -13,6 +13,9 @@ export interface Mailer {
   send(mail: DonationMail): Promise<void>;
 }
 
+/** Genau eine Adresse – keine Listen („a@x.de, b@y.de"), keine Anzeigenamen, keine Leerzeichen. */
+const isSingleAddress = (to: string): boolean => /^[^\s@,;<>"()]+@[^\s@,;<>"()]+$/.test(to.trim());
+
 /** Zeitlimits, damit ein hängender SMTP-Server keine Webhook-Verarbeitung minutenlang blockiert. */
 const SMTP_TIMEOUTS = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 };
 
@@ -34,6 +37,10 @@ export const createMailer = (config: DonationConfig['mail']): Mailer => {
   const transport = nodemailer.createTransport({ url: config.smtpUrl, ...SMTP_TIMEOUTS });
   return {
     async send(mail) {
+      if (!isSingleAddress(mail.to)) {
+        donationLog.warn('E-Mail nicht versendet: Empfänger ist keine einzelne Adresse');
+        return;
+      }
       await transport.sendMail({
         from: config.from,
         replyTo: config.replyTo ?? undefined,
@@ -55,7 +62,7 @@ export const restrictToTestRecipients = (mailer: Mailer, allowlist: string[]): M
   async send(mail) {
     const to = mail.to.trim().toLowerCase();
     const domain = to.slice(to.lastIndexOf('@') + 1);
-    if (allowlist.includes(to) || allowlist.includes(domain)) {
+    if (isSingleAddress(to) && (allowlist.includes(to) || allowlist.includes(domain))) {
       await mailer.send(mail);
       return;
     }

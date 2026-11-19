@@ -22,22 +22,24 @@ export const testEnv = {
 };
 
 export const createMemoryEventStore = () => {
-  const claimed = new Set<string>();
+  const claimed = new Map<string, string>();
   const done = new Set<string>();
-  const store: WebhookEventStore & { claimed: Set<string>; done: Set<string> } = {
+  let counter = 0;
+  const store: WebhookEventStore & { claimed: Map<string, string>; done: Set<string> } = {
     claimed,
     done,
     async claim(eventId) {
-      if (done.has(eventId)) return 'done';
-      if (claimed.has(eventId)) return 'busy';
-      claimed.add(eventId);
-      return 'claimed';
+      if (done.has(eventId)) return { status: 'done' };
+      if (claimed.has(eventId)) return { status: 'busy' };
+      const token = `token-${(counter += 1)}`;
+      claimed.set(eventId, token);
+      return { status: 'claimed', token };
     },
-    async complete(eventId) {
-      done.add(eventId);
+    async complete(eventId, token) {
+      if (claimed.get(eventId) === token) done.add(eventId);
     },
-    async release(eventId) {
-      claimed.delete(eventId);
+    async release(eventId, token) {
+      if (claimed.get(eventId) === token) claimed.delete(eventId);
     },
   };
   return store;
@@ -68,12 +70,20 @@ export const createMemorySubscriberStore = (initial: DonationSubscriber[] = []) 
     },
     async linkSubscription(id, stripeSubscriptionId, expected) {
       for (const entry of entries.values()) {
-        if (entry.id === id && entry.stripeSubscriptionId === expected) {
+        if (
+          entry.id === id &&
+          (entry.stripeSubscriptionId === expected || entry.stripeSubscriptionId === stripeSubscriptionId)
+        ) {
           Object.assign(entry, { stripeSubscriptionId, endedAt: null });
           return true;
         }
       }
       return false;
+    },
+    async setCustomer(id, stripeCustomerId) {
+      for (const entry of entries.values()) {
+        if (entry.id === id) entry.stripeCustomerId = stripeCustomerId;
+      }
     },
     async markEnded(stripeSubscriptionId, endedAt) {
       for (const entry of entries.values()) {

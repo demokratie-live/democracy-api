@@ -91,6 +91,21 @@ describe('POST /donations/v1/stripe-webhook', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('antwortet 200 und verarbeitet nicht erneut, wenn nur das Markieren als erledigt scheitert', async () => {
+    const handler = vi.fn(async () => undefined);
+    const { post, eventStore } = await setup({ 'payment_intent.succeeded': handler });
+    eventStore.complete = vi.fn(async () => {
+      throw Object.assign(new Error('primary stepped down'), { code: 'NotWritablePrimary' });
+    });
+
+    const response = await post(event('evt_complete', 'payment_intent.succeeded', ownPaymentIntent));
+    expect(response.status).toBe(200);
+    // Nicht freigegeben: eine Wiederholung gilt bis Fristablauf als „busy", die Mail geht nicht doppelt raus.
+    expect(eventStore.claimed.has('evt_complete')).toBe(true);
+    expect((await post(event('evt_complete', 'payment_intent.succeeded', ownPaymentIntent))).status).toBe(409);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('lehnt ungültige Signaturen mit 400 ab', async () => {
     const handler = vi.fn(async () => undefined);
     const { post } = await setup({ 'payment_intent.succeeded': handler });

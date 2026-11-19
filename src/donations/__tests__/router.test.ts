@@ -43,7 +43,11 @@ describe('Donations-Router', () => {
     expect((await readJson(limited)).error.code).toBe('rate_limited');
   });
 
-  it('deaktiviert das Modul bei ungültiger Konfiguration, statt die ganze API abstürzen zu lassen', async () => {
+  it('bricht bei eingeschaltetem Modul und ungültiger Konfiguration ab (Rollout stoppt, alte Pods laufen weiter)', () => {
+    expect(() => createDonationsRouterFromEnv({ ...testEnv, DONATION_FEE_CARD_PCT: '1,5' })).toThrow();
+  });
+
+  it('lässt das ausgeschaltete Modul bei ungültiger Konfiguration aus, statt die ganze API abstürzen zu lassen', async () => {
     const previous = process.env.DONATION_FEE_CARD_PCT;
     process.env.DONATION_FEE_CARD_PCT = '1,5';
     try {

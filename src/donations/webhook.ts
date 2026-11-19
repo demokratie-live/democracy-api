@@ -89,33 +89,50 @@ export const createWebhookHandler =
       return;
     }
 
-    let claimed = false;
+    let claim;
     try {
-      const claim = await eventStore.claim(event.id, event.type);
-      if (claim === 'done') {
-        res.json({ received: true, duplicate: true });
-        return;
-      }
-      if (claim === 'busy') {
-        // Wird gerade parallel verarbeitet: kein 2xx, damit Stripe später erneut zustellt – falls die
-        // laufende Verarbeitung scheitert, geht das Event so nicht verloren.
-        res.status(409).json({ received: false, inProgress: true });
-        return;
-      }
-      claimed = true;
-      await handler(event);
-      await eventStore.complete(event.id);
-      donationLog.info('Webhook verarbeitet', meta);
-      res.json({ received: true });
+      claim = await eventStore.claim(event.id, event.type);
     } catch (error) {
-      if (claimed) {
-        await eventStore.release(event.id).catch(() => undefined);
-      }
+      donationLog.error('Webhook konnte nicht reserviert werden', {
+        ...meta,
+        code: (error as { code?: string })?.code ?? 'claim_error',
+      });
+      const failure = new DonationError('internal_error');
+      res.status(failure.status).json(failure.toBody());
+      return;
+    }
+    if (claim.status === 'done') {
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+    if (claim.status === 'busy') {
+      // Wird gerade parallel verarbeitet: kein 2xx, damit Stripe später erneut zustellt – falls die
+      // laufende Verarbeitung scheitert, geht das Event so nicht verloren.
+      res.status(409).json({ received: false, inProgress: true });
+      return;
+    }
+
+    try {
+      await handler(event);
+    } catch (error) {
+      await eventStore.release(event.id, claim.token).catch(() => undefined);
       donationLog.error('Webhook-Verarbeitung fehlgeschlagen', {
         ...meta,
         code: (error as { code?: string })?.code ?? 'handler_error',
       });
       const failure = new DonationError('internal_error');
       res.status(failure.status).json(failure.toBody());
+      return;
     }
+
+    // Verarbeitet (Mails sind raus). Scheitert nur das Markieren, trotzdem 200 – sonst stellte Stripe
+    // erneut zu und Mails gingen doppelt raus. Die Sperre verfällt nach Ablauf der Frist.
+    await eventStore.complete(event.id, claim.token).catch((error: unknown) => {
+      donationLog.error('Webhook verarbeitet, aber nicht als erledigt markiert', {
+        ...meta,
+        code: (error as { code?: string })?.code ?? 'complete_error',
+      });
+    });
+    donationLog.info('Webhook verarbeitet', meta);
+    res.json({ received: true });
   };

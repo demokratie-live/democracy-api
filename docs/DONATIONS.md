@@ -223,9 +223,11 @@ im Client-Repo: `docs/deployment/IOS.md` und `docs/deployment/ANDROID.md` (Absch
   weil viele Mobilfunkkund:innen sich eine IPv4 teilen (Carrier-NAT). Der Zählerschlüssel ist ein
   gesalzener IP-Hash; IPs werden nicht gespeichert. Hauptschutz gegen Card-Testing sind Stripe Radar
   und der Mindestbetrag; bei Missbrauch Radar-Regeln verschärfen.
-- **Fehlerhafte Konfiguration:** Ist eine Spenden-Variable ungültig (z. B. `DONATION_FEE_CARD_PCT=1,5`),
-  startet die API trotzdem; das Spendenmodul antwortet dann auf alles mit `503 donations_disabled` und
-  loggt „Spendenmodul deaktiviert – Konfiguration ungültig" mit den Problemen (ohne Werte).
+- **Fehlerhafte Konfiguration:** Bei `DONATIONS_ENABLED=true` startet die API mit ungültiger
+  Spenden-Konfiguration bewusst **nicht** (fail fast): Der Rollout bleibt stehen, die alten Pods laufen
+  weiter – Webhooks und Kündigen bleiben so erreichbar. Bei ausgeschaltetem Modul legt eine fehlerhafte
+  Spenden-Variable (z. B. `DONATION_FEE_CARD_PCT=1,5`) die API nicht lahm; das Modul bleibt aus und loggt
+  „Spendenmodul bleibt aus – Konfiguration ungültig" mit den Problemen (ohne Werte).
 - **Testmodus-Mails:** Mit Stripe-Testschlüssel (internal) gehen Bestätigungen nur an
   `DONATION_TEST_MAIL_ALLOWLIST` – dort kann jeder mit Testkarten „spenden", ohne Liste ließe sich der
   Vereins-Absender als Spam-Schleuder missbrauchen.

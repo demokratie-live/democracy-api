@@ -20,6 +20,14 @@ describe('Mails im Stripe-Testmodus', () => {
     ]);
   });
 
+  it('lässt keine Adresslisten durch, auch wenn eine Adresse freigegeben ist', async () => {
+    const inner = { send: vi.fn(async (_mail: { to: string }) => undefined) };
+    const mailer = restrictToTestRecipients(inner, ['democracy-deutschland.de']);
+    await mailer.send(mail('opfer@gmail.com, team@democracy-deutschland.de'));
+    await mailer.send(mail('Opfer <opfer@gmail.com>;team@democracy-deutschland.de'));
+    expect(inner.send).not.toHaveBeenCalled();
+  });
+
   it('versendet ohne Freigabeliste gar nichts', async () => {
     const inner = { send: vi.fn(async () => undefined) };
     await restrictToTestRecipients(inner, []).send(mail('pate@example.org'));

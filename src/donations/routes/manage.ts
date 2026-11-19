@@ -97,7 +97,7 @@ export const createManageRoutes = ({ config, stripe, subscribers }: Deps) => {
     const endsAt = subscription.cancel_at ?? item?.current_period_end ?? null;
     return {
       status: STATUS[subscription.status],
-      cancelAtPeriodEnd: subscription.cancel_at_period_end || subscription.cancel_at !== null,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end || Boolean(subscription.cancel_at),
       amountCents,
       baseAmountCents: Number(subscription.metadata?.base_amount) || amountCents,
       coverFees: subscription.metadata?.cover_fees === 'true',

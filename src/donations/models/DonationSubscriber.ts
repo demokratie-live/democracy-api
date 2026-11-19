@@ -44,6 +44,8 @@ export interface SubscriberStore {
    * Setzen gegen parallele Requests). Hebt einen „beendet"-Status auf. `false` = Race verloren.
    */
   linkSubscription(id: string, stripeSubscriptionId: string, expected: string | null): Promise<boolean>;
+  /** Ersetzt den Customer (z. B. wenn er bei Stripe gelöscht wurde). */
+  setCustomer(id: string, stripeCustomerId: string): Promise<void>;
   /** Markiert die Dauerspende als beendet – nur, wenn es die aktuelle Subscription des Eintrags ist. */
   markEnded(stripeSubscriptionId: string, endedAt: Date): Promise<boolean>;
 }
@@ -72,7 +74,16 @@ export const mongoSubscriberStore: SubscriberStore = {
   async insert(keyHash, stripeCustomerId) {
     const doc = await DonationSubscriberModel.findOneAndUpdate(
       { keyHash },
-      { $setOnInsert: { keyHash, stripeCustomerId, stripeSubscriptionId: null, endedAt: null, deleteAt: null } },
+      // Ohne zugeordnete Dauerspende (z. B. Anlegen scheiterte) verfällt der Eintrag nach 90 Tagen.
+      {
+        $setOnInsert: {
+          keyHash,
+          stripeCustomerId,
+          stripeSubscriptionId: null,
+          endedAt: null,
+          deleteAt: new Date(Date.now() + RETENTION_AFTER_END_MS),
+        },
+      },
       { upsert: true, new: true },
     ).lean();
     return toSubscriber(doc as SubscriberDocument);
@@ -80,13 +91,18 @@ export const mongoSubscriberStore: SubscriberStore = {
   async linkSubscription(id, stripeSubscriptionId, expected) {
     // endedAt zurücksetzen: Ein „beendet"-Webhook der ersetzten (incomplete) Subscription kann vor
     // diesem Aufruf eingetroffen sein und den Eintrag sonst fälschlich als beendet markieren.
+    // Zeigt der Eintrag schon auf diese Subscription (Wiederholung desselben Requests), gilt das als
+    // Erfolg – sonst würde die Wiederholung die Subscription kündigen, die bezahlt werden soll.
     const result = await DonationSubscriberModel.updateOne(
-      { _id: id, stripeSubscriptionId: expected },
+      { _id: id, stripeSubscriptionId: { $in: [expected, stripeSubscriptionId] } },
       { $set: { stripeSubscriptionId, endedAt: null, deleteAt: null } },
     );
     // „Gefunden" zählt (nicht „geändert"): Bei einer Wiederholung ist der Wert schon gesetzt.
     const { matchedCount, n } = result as { matchedCount?: number; n?: number };
     return (matchedCount ?? n ?? 0) > 0;
+  },
+  async setCustomer(id, stripeCustomerId) {
+    await DonationSubscriberModel.updateOne({ _id: id }, { $set: { stripeCustomerId } });
   },
   async markEnded(stripeSubscriptionId, endedAt) {
     const result = await DonationSubscriberModel.updateOne(
