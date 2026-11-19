@@ -10,6 +10,7 @@ import { mongoSubscriberStore, type SubscriberStore } from './models/DonationSub
 import { mongoWebhookEventStore, type WebhookEventStore } from './models/DonationWebhookEvent';
 import { createPaymentRateLimiter } from './rateLimit';
 import { configRoute } from './routes/config';
+import { createManageRoutes } from './routes/manage';
 import { monthlyRoute } from './routes/monthly';
 import { oneTimeRoute } from './routes/oneTime';
 import { createStripeClient } from './stripe';
@@ -95,6 +96,13 @@ export const createDonationsRouter = (deps: DonationsDeps): Router => {
     requireEnabled(config),
     stripe ? monthlyRoute({ config, stripe, subscribers: deps.subscribers }) : unavailable,
   );
+
+  // Verwalten (Spender-Schlüssel nötig): ohne Rate-Limit und ohne Kill-Switch – Kündigen muss immer gehen.
+  const manage = stripe ? createManageRoutes({ config, stripe, subscribers: deps.subscribers }) : null;
+  router.get('/monthly', manage?.get ?? unavailable);
+  router.patch('/monthly', manage?.update ?? unavailable);
+  router.delete('/monthly', manage?.cancel ?? unavailable);
+  router.post('/monthly/portal-session', manage?.portalSession ?? unavailable);
 
   // Unbekannte Pfade enden hier und laufen nie in Auth-Middleware oder GraphQL weiter.
   router.use((_req, res) => {

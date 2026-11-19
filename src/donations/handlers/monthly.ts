@@ -3,7 +3,7 @@ import type { DonationConfig } from '../config';
 import { DONATION_SOURCE } from '../constants';
 import { donationLog } from '../log';
 import type { Mailer } from '../mail/mailer';
-import { monthlyConfirmationMail, monthlyEndedMail } from '../mail/templates';
+import { monthlyCancellationConfirmedMail, monthlyConfirmationMail, monthlyEndedMail } from '../mail/templates';
 import type { SubscriberStore } from '../models/DonationSubscriber';
 import type { WebhookHandlers } from '../webhook';
 import { customerEmail, idOf, paymentMethodLabel } from './shared';
@@ -15,7 +15,10 @@ import { customerEmail, idOf, paymentMethodLabel } from './shared';
  *   bekommt den Willkommenstext mit Verwaltungslink.
  * - invoice.payment_failed: nur Log – die Mahn-E-Mail mit Link verschickt Stripe Billing selbst.
  * - customer.subscription.deleted / updated → incomplete_expired: Zuordnung als beendet markieren
- *   (Löschung nach 90 Tagen); Mail „beendet" nur, wenn die Dauerspende je bezahlt wurde.
+ *   (Löschung nach 90 Tagen); Mail „beendet" nur, wenn die Dauerspende je bezahlt wurde und die
+ *   Kündigung nicht schon vorher bestätigt wurde.
+ * - customer.subscription.updated → Kündigung zum Periodenende vorgemerkt (App oder Kundenportal):
+ *   Mail „Kündigung bestätigt" mit Enddatum (T052).
  */
 
 interface Deps {
@@ -31,6 +34,14 @@ const subscriptionMetadata = (invoice: Stripe.Invoice): Record<string, string> =
 const subscriptionIdOfInvoice = (invoice: Stripe.Invoice): string | null =>
   idOf(invoice.parent?.subscription_details?.subscription as string | { id: string } | null | undefined);
 
+/** Zum Periodenende vorgemerkt? Dann liegt die Kündigung (canceled_at) vor dem tatsächlichen Ende. */
+const wasScheduled = (subscription: Stripe.Subscription): boolean =>
+  subscription.cancel_at_period_end ||
+  Boolean(subscription.canceled_at && subscription.ended_at && subscription.ended_at - subscription.canceled_at > 60);
+
+const isOwnMonthly = (subscription: Stripe.Subscription): boolean =>
+  subscription.metadata?.source === DONATION_SOURCE && subscription.metadata?.interval === 'monthly';
+
 const endReason = (subscription: Stripe.Subscription): 'cancellation_requested' | 'payment_failed' | 'other' => {
   const reason = subscription.cancellation_details?.reason;
   if (reason === 'cancellation_requested') return 'cancellation_requested';
@@ -40,9 +51,11 @@ const endReason = (subscription: Stripe.Subscription): 'cancellation_requested' 
 
 export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: Deps): WebhookHandlers => {
   const endSubscription = async (subscription: Stripe.Subscription, sendMail: boolean) => {
-    if (subscription.metadata?.source !== DONATION_SOURCE || subscription.metadata?.interval !== 'monthly') return;
+    if (!isOwnMonthly(subscription)) return;
     const marked = await subscribers.markEnded(subscription.id, new Date());
     if (!sendMail) return;
+    // Vorgemerkte Kündigung: Die Bestätigung mit Enddatum ging schon raus.
+    if (wasScheduled(subscription)) return;
 
     // Nur informieren, wenn tatsächlich gespendet wurde (nicht bei ersetzten/abgebrochenen Erstzahlungen).
     const paid = await stripe.invoices.list({ subscription: subscription.id, status: 'paid', limit: 1 });
@@ -106,7 +119,21 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
       const subscription = event.data.object as Stripe.Subscription;
       if (subscription.status === 'incomplete_expired') {
         await endSubscription(subscription, false);
+        return;
       }
+      if (!isOwnMonthly(subscription)) return;
+
+      const previous = (event.data.previous_attributes ?? {}) as Partial<Stripe.Subscription>;
+      const scheduledNow =
+        (subscription.cancel_at_period_end && previous.cancel_at_period_end === false) ||
+        (Boolean(subscription.cancel_at) && 'cancel_at' in previous && previous.cancel_at === null);
+      if (!scheduledNow) return;
+
+      const to = await customerEmail(stripe, idOf(subscription.customer));
+      if (!to) return;
+      const endsAt = subscription.cancel_at ?? subscription.items?.data?.[0]?.current_period_end ?? null;
+      await mailer.send(monthlyCancellationConfirmedMail({ to, endsAt, config }));
+      donationLog.info('Kündigung der Dauerspende bestätigt', { stripeId: subscription.id, eventType: event.type });
     },
   };
 };

@@ -222,3 +222,26 @@ export const monthlyEndedMail = ({ to, reason, config }: MonthlyEnded): Donation
   ].join('\n');
   return { to, subject: 'Deine Dauerspende an DEMOCRACY ist beendet', text };
 };
+
+interface CancellationConfirmed {
+  to: string;
+  endsAt: number | null;
+  config: ReceiptConfig;
+}
+
+export const monthlyCancellationConfirmedMail = ({ to, endsAt, config }: CancellationConfirmed): DonationMail => {
+  const until = endsAt
+    ? `Deine Dauerspende läuft noch bis zum ${formatDate(endsAt)}. Danach buchen wir nichts mehr ab.`
+    : 'Danach buchen wir nichts mehr ab.';
+  const text = [
+    'Hallo,',
+    '',
+    `Deine Kündigung ist bei uns angekommen. ${until}`,
+    '',
+    'Vielen Dank, dass Du DEMOCRACY unterstützt hast! Wenn Du es Dir anders überlegst, kannst Du',
+    'jederzeit wieder in der DEMOCRACY-App unter „Spenden" eine Dauerspende einrichten.',
+    '',
+    footer(config),
+  ].join('\n');
+  return { to, subject: 'Deine Kündigung der Dauerspende an DEMOCRACY', text };
+};

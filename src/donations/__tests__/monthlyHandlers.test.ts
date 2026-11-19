@@ -38,8 +38,8 @@ const subscription = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const event = (type: string, object: Record<string, unknown>) =>
-  ({ id: 'evt_1', type, created: PAID_AT, data: { object } }) as unknown as Stripe.Event;
+const event = (type: string, object: Record<string, unknown>, previous?: Record<string, unknown>) =>
+  ({ id: 'evt_1', type, created: PAID_AT, data: { object, previous_attributes: previous } }) as unknown as Stripe.Event;
 
 const setup = ({ paidInvoices = 1 } = {}) => {
   const stripe = {
@@ -121,6 +121,37 @@ describe('Webhook-Handler Dauerspende (T041/T042)', () => {
     const { handlers, mailer, subscribers } = setup();
     await handlers['customer.subscription.updated']!(
       event('customer.subscription.updated', subscription({ status: 'incomplete_expired' })),
+    );
+    expect(subscribers.entries.get('a'.repeat(64))?.endedAt).toBeInstanceOf(Date);
+    expect(mailer.send).not.toHaveBeenCalled();
+  });
+
+  it('bestätigt eine vorgemerkte Kündigung (App oder Kundenportal) mit Enddatum (T052)', async () => {
+    const { handlers, sentMail, subscribers } = setup();
+    await handlers['customer.subscription.updated']!(
+      event(
+        'customer.subscription.updated',
+        subscription({
+          status: 'active',
+          cancel_at_period_end: true,
+          cancel_at: PERIOD_END,
+          items: { data: [{ current_period_end: PERIOD_END }] },
+        }),
+        { cancel_at_period_end: false, cancel_at: null },
+      ),
+    );
+    expect(sentMail().subject).toBe('Deine Kündigung der Dauerspende an DEMOCRACY');
+    expect(sentMail().text).toContain('läuft noch bis zum 20. Dezember 2025');
+    expect(subscribers.entries.get('a'.repeat(64))?.endedAt).toBeNull();
+  });
+
+  it('schickt nach einer vorgemerkten Kündigung am Periodenende keine zweite Mail', async () => {
+    const { handlers, mailer, subscribers } = setup();
+    await handlers['customer.subscription.deleted']!(
+      event(
+        'customer.subscription.deleted',
+        subscription({ cancel_at_period_end: true, canceled_at: PAID_AT, ended_at: PERIOD_END }),
+      ),
     );
     expect(subscribers.entries.get('a'.repeat(64))?.endedAt).toBeInstanceOf(Date);
     expect(mailer.send).not.toHaveBeenCalled();
