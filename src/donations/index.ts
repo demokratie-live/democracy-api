@@ -2,11 +2,13 @@ import express, { type ErrorRequestHandler, type RequestHandler, type Router } f
 import type Stripe from 'stripe';
 import { loadDonationConfig, type DonationConfig } from './config';
 import { DonationError } from './errors';
+import { createOneTimeHandlers } from './handlers/oneTime';
 import { donationLog } from './log';
 import { createMailer, type Mailer } from './mail/mailer';
 import { mongoWebhookEventStore, type WebhookEventStore } from './models/DonationWebhookEvent';
 import { createPaymentRateLimiter } from './rateLimit';
 import { configRoute } from './routes/config';
+import { oneTimeRoute } from './routes/oneTime';
 import { createStripeClient } from './stripe';
 import { createWebhookHandler, type WebhookHandlers } from './webhook';
 
@@ -73,8 +75,17 @@ export const createDonationsRouter = (deps: DonationsDeps): Router => {
 
   router.get('/config', configRoute(config));
 
-  // Zahlungsauslösende Endpunkte (Implementierung in Phase 3/4): Rate-Limit und Kill-Switch zuerst.
-  router.post(['/one-time', '/monthly'], createPaymentRateLimiter(), requireEnabled(config));
+  // Zahlungsauslösende Endpunkte: gemeinsames Rate-Limit und Kill-Switch zuerst.
+  // Ist das Modul aktiv, gibt es immer einen Stripe-Client (Konfigurationsprüfung beim Start).
+  const paymentLimiter = createPaymentRateLimiter();
+  const unavailable: RequestHandler = (_req, res) => sendError(res, new DonationError('donations_disabled'));
+  router.post(
+    '/one-time',
+    paymentLimiter,
+    requireEnabled(config),
+    stripe ? oneTimeRoute({ config, stripe }) : unavailable,
+  );
+  router.post('/monthly', paymentLimiter, requireEnabled(config)); // Implementierung: Phase 4 (T040)
 
   // Unbekannte Pfade enden hier und laufen nie in Auth-Middleware oder GraphQL weiter.
   router.use((_req, res) => {
@@ -92,12 +103,18 @@ export const createDonationsRouterFromEnv = (): Router => {
   if (config.enabled && !config.mail.smtpUrl) {
     donationLog.warn('SMTP_URL fehlt – Spendenbestätigungen werden nicht versendet');
   }
+  if (config.enabled && !config.receipt.exemption) {
+    donationLog.warn(
+      'DONATION_RECEIPT_EXEMPTION fehlt – Bestätigungen verweisen nur auf den Gemeinnützigkeitsnachweis',
+    );
+  }
+  const mailer = createMailer(config.mail);
   donationLog.info(config.enabled ? 'Spendenmodul aktiv' : 'Spendenmodul deaktiviert (DONATIONS_ENABLED=false)');
   return createDonationsRouter({
     config,
     stripe,
     eventStore: mongoWebhookEventStore,
-    mailer: createMailer(config.mail),
-    webhookHandlers: {},
+    mailer,
+    webhookHandlers: stripe ? { ...createOneTimeHandlers({ stripe, mailer, config }) } : {},
   });
 };

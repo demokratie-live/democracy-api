@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import type Stripe from 'stripe';
+import { DONATION_SOURCE } from './constants';
 import { DonationError } from './errors';
 import { donationLog } from './log';
 import type { WebhookEventStore } from './models/DonationWebhookEvent';
@@ -11,8 +12,6 @@ import type { WebhookEventStore } from './models/DonationWebhookEvent';
  * Idempotenz über die Event-ID → Handler. Schlägt ein Handler fehl, wird das Event freigegeben
  * und `500` geantwortet, damit Stripe die Zustellung wiederholt.
  */
-
-const DONATION_SOURCE = 'democracy-app';
 
 export type WebhookHandler = (event: Stripe.Event) => Promise<void>;
 export type WebhookHandlers = Partial<Record<Stripe.Event['type'], WebhookHandler>>;

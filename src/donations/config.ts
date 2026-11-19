@@ -46,6 +46,12 @@ export interface DonationConfig {
   bankTransfer: { holder: string; iban: string; bic: string };
   legal: { privacyUrl: string; nonprofitProofUrl: string; simplifiedReceiptUrl: string };
   mail: { smtpUrl: string | null; from: string; replyTo: string | null };
+  /**
+   * Angaben für die Spendenbestätigung (FR-018, vereinfachter Zuwendungsnachweis).
+   * `exemption` (Finanzamt, Datum, Steuernummer des Freistellungsbescheids) wird bewusst nicht
+   * vorbelegt – ohne Wert verweist die Mail auf den Nachweis der Gemeinnützigkeit (research.md O2).
+   */
+  receipt: { organization: string; purpose: string; exemption: string | null };
 }
 
 export class DonationConfigError extends Error {
@@ -149,6 +155,13 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       simplifiedReceiptUrl:
         nonEmpty(env.DONATION_SIMPLIFIED_RECEIPT_URL) ??
         'https://www.democracy-deutschland.de/files/download/Vereinfachter_Zuwendungsnachweis.pdf',
+    },
+    receipt: {
+      organization: nonEmpty(env.DONATION_RECEIPT_ORGANIZATION) ?? 'DEMOCRACY Deutschland e.V.',
+      purpose:
+        nonEmpty(env.DONATION_RECEIPT_PURPOSE) ??
+        'Förderung des demokratischen Staatswesens sowie der Volks- und Berufsbildung',
+      exemption: nonEmpty(env.DONATION_RECEIPT_EXEMPTION),
     },
     mail: {
       smtpUrl: nonEmpty(env.SMTP_URL),
