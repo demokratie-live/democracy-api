@@ -1,0 +1,24 @@
+# In-App-Spenden: eigener Pfad /donations ohne Access-Log (Datenschutz, research.md R10 im
+# democracy-client-Repo). Produktion/internal: Repo demokratie-live/infrastructure,
+# kustomize/overlays/*/yamls/donations-ingress.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: democracy-api-donations
+  labels:
+    app: democracy-api
+  annotations:
+    nginx.ingress.kubernetes.io/enable-access-log: 'false'
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: 'democracy-api.${var.hostname}'
+      http:
+        paths:
+          - backend:
+              service:
+                name: democracy-api
+                port:
+                  number: 80
+            path: /donations
+            pathType: Prefix
