@@ -204,13 +204,36 @@ im Client-Repo: `docs/deployment/IOS.md` und `docs/deployment/ANDROID.md` (Absch
 
 ## 5. Betrieb
 
-- **Monitoring:** Webhook-Fehler, Rückbuchungen (`charge.dispute.created`) und Erstattungen gehen
-  als Warnung an den Discord-Logger (nur Stripe-IDs).
+- **Hinweise für den Kassenwart (T062):** Erstattungen (`charge.refunded`), Rückbuchungen/Widersprüche
+  (`charge.dispute.created`) und ungültig gewordene SEPA-Mandate (`mandate.updated` → `inactive`)
+  protokolliert der Server als Warnung mit Herkunft `app`/`andere`/`unbekannt` und nur Stripe-IDs –
+  auch für DonorBox-Zahlungen. Spender:innen bekommen dazu keine Mail, Dauerspenden bleiben unverändert.
+  **Achtung:** Der Logger von democracy-api schreibt nur in Konsole und MongoDB (`LOGGING_DISCORD*` ist
+  konfiguriert, aber kein Transport angebunden). Den eigentlichen Alarm liefern deshalb Stripes
+  E-Mail-Benachrichtigungen: Dashboard → Einstellungen → Persönliche Daten → **Kommunikations-
+  einstellungen** → für den Kassenwart „Rückbuchungen/Disputes", „Erfolgreiche Zahlungen" (optional)
+  und „Fehlgeschlagene Zahlungen" aktivieren. Rückbuchungen haben eine Antwortfrist.
 - **Rate-Limit:** 10 Zahlungsversuche je 10 Minuten und Client, gezählt **pro Pod** im Speicher
   (Produktion: 10 Replicas → im ungünstigsten Fall bis zu 100). Der Zählerschlüssel ist ein
   gesalzener IP-Hash; IPs werden nicht gespeichert. Hauptschutz gegen Card-Testing sind Stripe Radar
   und der Mindestbetrag; bei Missbrauch Radar-Regeln verschärfen.
-- **Monatsexport für die Buchhaltung:** folgt mit Task T061.
+- **Monatsexport für die Buchhaltung (T061):** Dashboard → **Berichte → Saldo** → Zeitraum = Monat →
+  Detailbericht **„Saldoänderungen aus Aktivität" (Itemized balance change from activity)** →
+  „Spalten" → zusätzlich `payment_method_type`, `customer_email`, `subscription_id` sowie die
+  Metadaten `payment_metadata[source]`, `payment_metadata[interval]`, `payment_metadata[cover_fees]`,
+  `payment_metadata[base_amount]` → CSV herunterladen. In der Tabelle nach
+  `payment_metadata[source] = democracy-app` filtern; `gross` = Spende inkl. Aufschlag, `fee` =
+  Stripe-/PayPal-Gebühr, `net` = Auszahlung an den Verein. Erstattungen und Rückbuchungen stehen als
+  eigene Zeilen (`reporting_category` `refund` bzw. `dispute`) im selben Bericht.
+  - Dauerspenden: Stripe setzt bei Rechnungszahlungen keine Metadaten; der Server ergänzt sie beim
+    Webhook `invoice.paid` am PaymentIntent (ab 2026-11-19). **Beim ersten Monatsexport prüfen**, ob
+    die Spalte `payment_metadata[source]` auch bei Dauerspenden gefüllt ist. Falls nicht: Zeilen mit
+    `subscription_id` über die Subscription-Metadaten (`source: democracy-app`) zuordnen.
+  - Für den Abgleich mit dem Bankkonto: Bericht **„Auszahlungsabgleich" (Payout reconciliation)**
+    desselben Monats – jede Auszahlung mit den enthaltenen Spenden.
+  - Kennzahlen: Anteil `cover_fees = true` an allen App-Spenden (SC-002a); Erfolgsquote = erfolgreiche
+    / alle angelegten PaymentIntents mit `source = democracy-app` (Dashboard → Zahlungen, Filter
+    „Status") (SC-004).
 - **Formale Zuwendungs-/Sammelbestätigung auf Anfrage:** folgt mit Task T060.
 - **DonorBox:** nutzt dasselbe Stripe-Konto. Alle App-Objekte tragen
   `metadata.source = democracy-app`; alles andere ignoriert der Webhook.

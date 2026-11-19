@@ -12,7 +12,9 @@ import { customerEmail, idOf, paymentMethodLabel } from './shared';
  * Webhook-Handler für Dauerspenden (contracts/stripe-webhooks.md, T041/T042).
  *
  * - invoice.paid: Bestätigung je Abbuchung; die erste Rechnung (billing_reason subscription_create)
- *   bekommt den Willkommenstext mit Verwaltungslink.
+ *   bekommt den Willkommenstext mit Verwaltungslink. Außerdem bekommt der PaymentIntent der Rechnung
+ *   die Metadaten (`source`, `interval`, …), damit Dashboard-Suche und Export Dauerspenden aus der App
+ *   von DonorBox unterscheiden (T061) – Stripe setzt bei Rechnungen selbst keine.
  * - invoice.payment_failed: nur Log – die Mahn-E-Mail mit Link verschickt Stripe Billing selbst.
  * - customer.subscription.deleted / updated → incomplete_expired: Zuordnung als beendet markieren
  *   (Löschung nach 90 Tagen); Mail „beendet" nur, wenn die Dauerspende je bezahlt wurde und die
@@ -50,6 +52,34 @@ const endReason = (subscription: Stripe.Subscription): 'cancellation_requested' 
 };
 
 export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: Deps): WebhookHandlers => {
+  /** Fehler hier dürfen die Bestätigung nicht verhindern (sonst Wiederholung → doppelte Mail). */
+  const tagInvoicePayment = async (
+    invoice: Stripe.Invoice,
+    metadata: Record<string, string>,
+    subscriptionId: string,
+  ) => {
+    try {
+      const payments = await stripe.invoicePayments.list({ invoice: invoice.id as string, limit: 10 });
+      const payment = payments.data.find((entry) => entry.status === 'paid') ?? payments.data[0];
+      const intentId = idOf(payment?.payment?.payment_intent as string | { id: string } | null | undefined);
+      if (!intentId) return;
+      await stripe.paymentIntents.update(intentId, {
+        metadata: {
+          source: DONATION_SOURCE,
+          interval: 'monthly',
+          base_amount: metadata.base_amount ?? '',
+          cover_fees: metadata.cover_fees ?? '',
+          subscription: subscriptionId,
+        },
+      });
+    } catch (error) {
+      donationLog.warn('Rechnungszahlung konnte nicht markiert werden', {
+        stripeId: invoice.id,
+        code: (error as { code?: string })?.code ?? 'unknown',
+      });
+    }
+  };
+
   const endSubscription = async (subscription: Stripe.Subscription, sendMail: boolean) => {
     if (!isOwnMonthly(subscription)) return;
     const marked = await subscribers.markEnded(subscription.id, new Date());
@@ -74,6 +104,7 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
       const subscriptionId = subscriptionIdOfInvoice(invoice);
       if (!subscriptionId) return;
 
+      await tagInvoicePayment(invoice, metadata, subscriptionId);
       const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
         expand: ['default_payment_method'],
       });

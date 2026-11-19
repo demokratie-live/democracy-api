@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler, type RequestHandler, type Router } f
 import type Stripe from 'stripe';
 import { loadDonationConfig, type DonationConfig } from './config';
 import { DonationError } from './errors';
+import { createAccountAlertHandlers } from './handlers/accountAlerts';
 import { createMonthlyHandlers } from './handlers/monthly';
 import { createOneTimeHandlers } from './handlers/oneTime';
 import { donationLog } from './log';
@@ -137,6 +138,7 @@ export const createDonationsRouterFromEnv = (): Router => {
       ? {
           ...createOneTimeHandlers({ stripe, mailer, config }),
           ...createMonthlyHandlers({ stripe, mailer, config, subscribers: mongoSubscriberStore }),
+          ...createAccountAlertHandlers({ stripe }),
         }
       : {},
   });

@@ -51,6 +51,10 @@ const setup = ({ paidInvoices = 1 } = {}) => {
       })),
     },
     invoices: { list: vi.fn(async () => ({ data: Array.from({ length: paidInvoices }, () => ({ id: 'in_x' })) })) },
+    invoicePayments: {
+      list: vi.fn(async () => ({ data: [{ status: 'paid', payment: { payment_intent: 'pi_inv_1' } }] })),
+    },
+    paymentIntents: { update: vi.fn(async () => ({ id: 'pi_inv_1' })) },
   };
   const mailer = { send: vi.fn(async (_mail: Mail) => undefined) };
   const subscribers = createMemorySubscriberStore([
@@ -76,6 +80,27 @@ describe('Webhook-Handler Dauerspende (T041/T042)', () => {
     expect(mail.text).toContain('Zahlungsart: SEPA-Lastschrift');
     expect(mail.text).toContain(testEnv.STRIPE_PORTAL_LOGIN_URL);
     expect(mail.text).toContain('nicht um einen Mitgliedsbeitrag');
+  });
+
+  it('markiert den PaymentIntent der Rechnung für Export und Dashboard-Suche (T061)', async () => {
+    const { handlers, stripe } = setup();
+    await handlers['invoice.paid']!(event('invoice.paid', invoice()));
+    expect(stripe.paymentIntents.update).toHaveBeenCalledWith('pi_inv_1', {
+      metadata: {
+        source: 'democracy-app',
+        interval: 'monthly',
+        base_amount: '500',
+        cover_fees: 'true',
+        subscription: 'sub_1',
+      },
+    });
+  });
+
+  it('verschickt die Bestätigung auch, wenn das Markieren scheitert', async () => {
+    const { handlers, stripe, mailer } = setup();
+    stripe.paymentIntents.update.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'resource_missing' }));
+    await handlers['invoice.paid']!(event('invoice.paid', invoice()));
+    expect(mailer.send).toHaveBeenCalledTimes(1);
   });
 
   it('bestätigt Folgeabbuchungen ohne Willkommenstext', async () => {
