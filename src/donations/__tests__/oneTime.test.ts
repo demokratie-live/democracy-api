@@ -75,7 +75,7 @@ describe('POST /donations/v1/one-time', () => {
         payment_method: 'pm_123',
         payment_method_configuration: 'pmc_test',
         automatic_payment_methods: { enabled: true },
-        capture_method: 'automatic_async',
+        capture_method: 'automatic',
         description: 'Spende an DEMOCRACY Deutschland e.V.',
         statement_descriptor_suffix: 'SPENDE',
         metadata: {

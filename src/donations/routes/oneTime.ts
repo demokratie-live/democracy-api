@@ -36,8 +36,10 @@ export const oneTimeRoute =
             payment_method: input.paymentMethodId,
             payment_method_configuration: config.stripe.paymentMethodConfigurationId ?? undefined,
             automatic_payment_methods: { enabled: true },
-            // Muss zur `captureMethod` der App (PaymentSheet intentConfiguration) passen – das SDK prüft das.
-            capture_method: 'automatic_async',
+            // Muss zur `captureMethod` der App passen (das PaymentSheet prüft das vor dem Bestätigen).
+            // Bewusst „automatic": stripe-react-native 0.38.6 (iOS) kann „automatic_async" – den
+            // API-Standard seit 2024 – nicht einlesen und bricht sonst ab (research.md R12).
+            capture_method: 'automatic',
             description: `Spende an ${config.receipt.organization}`,
             statement_descriptor_suffix: 'SPENDE',
             metadata: {
