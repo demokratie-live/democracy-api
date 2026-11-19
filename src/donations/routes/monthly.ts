@@ -47,6 +47,10 @@ export const monthlyRoute =
         { coverFees: input.coverFees, interval: 'monthly' },
         config.fees,
       );
+      // Zeigte die App einen anderen Betrag (veraltete Gebühren), nichts bei Stripe anlegen.
+      if (input.expectedChargedAmountCents !== null && input.expectedChargedAmountCents !== amount) {
+        throw new DonationError('amount_changed');
+      }
       const productId = config.stripe.donationProductId;
       if (!productId) throw new DonationError('donations_disabled');
 

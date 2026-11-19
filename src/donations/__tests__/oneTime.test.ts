@@ -117,6 +117,18 @@ describe('POST /donations/v1/one-time', () => {
     expect(stripe.paymentIntents.create.mock.calls[0][0]).toMatchObject({ customer: undefined, amount: 1000 });
   });
 
+  it('lehnt einen abweichenden angezeigten Betrag ab, bevor bei Stripe etwas angelegt wird (409 amount_changed)', async () => {
+    const stripe = fakeStripe();
+    const post = await start(stripe);
+    const response = await post({ ...body, expectedChargedAmountCents: 1040 });
+    expect(response.status).toBe(409);
+    expect((await readJson(response)).error.code).toBe('amount_changed');
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(stripe.customers.list).not.toHaveBeenCalled();
+
+    expect((await post({ ...body, expectedChargedAmountCents: 1041 })).status).toBe(200);
+  });
+
   it('prüft Betrag und Idempotency-Key, bevor Stripe aufgerufen wird', async () => {
     const stripe = fakeStripe();
     const post = await start(stripe);

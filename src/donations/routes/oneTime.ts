@@ -24,6 +24,10 @@ export const oneTimeRoute =
         { coverFees: input.coverFees, interval: 'one_time' },
         config.fees,
       );
+      // Zeigte die App einen anderen Betrag (veraltete Gebühren), nichts bei Stripe anlegen.
+      if (input.expectedChargedAmountCents !== null && input.expectedChargedAmountCents !== amount) {
+        throw new DonationError('amount_changed');
+      }
 
       let intent: Stripe.PaymentIntent;
       try {

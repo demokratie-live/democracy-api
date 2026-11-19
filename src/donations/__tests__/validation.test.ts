@@ -84,6 +84,7 @@ describe('validateDonationRequest', () => {
       paymentMethodId: 'pm_123abc',
       platform: 'ios',
       appVersion: '1.6.0',
+      expectedChargedAmountCents: null,
     });
   });
 

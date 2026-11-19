@@ -15,6 +15,8 @@ export interface DonationRequest {
   paymentMethodId: string;
   platform: Platform;
   appVersion: string | null;
+  /** Betrag, den die App angezeigt hat (inkl. Aufschlag); weicht er ab → 409 amount_changed. */
+  expectedChargedAmountCents: number | null;
 }
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -59,6 +61,15 @@ export const validateIdempotencyKey = (value: unknown): string => {
 const normalizeAppVersion = (value: unknown): string | null =>
   typeof value === 'string' && APP_VERSION.test(value) ? value : null;
 
+/** Optional: von der App angezeigter Gesamtbetrag in Cent (ganzzahlig). */
+const validateExpectedAmount = (value: unknown): number | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new DonationError('invalid_request');
+  }
+  return value;
+};
+
 /** Validiert den Body von `POST /one-time` bzw. `POST /monthly` (contracts/donations-api.md). */
 export const validateDonationRequest = (
   body: unknown,
@@ -83,5 +94,6 @@ export const validateDonationRequest = (
     paymentMethodId: validatePaymentMethodId(input.paymentMethodId),
     platform: validatePlatform(input.platform),
     appVersion: normalizeAppVersion(input.appVersion),
+    expectedChargedAmountCents: validateExpectedAmount(input.expectedChargedAmountCents),
   };
 };

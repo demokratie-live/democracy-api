@@ -6,6 +6,7 @@
 export type DonationErrorCode =
   | 'invalid_request'
   | 'amount_out_of_range'
+  | 'amount_changed'
   | 'invalid_email'
   | 'email_required'
   | 'invalid_platform'
@@ -26,6 +27,7 @@ export type DonationErrorCode =
 const MESSAGES: Record<DonationErrorCode, string> = {
   invalid_request: 'Die Anfrage ist ungültig.',
   amount_out_of_range: 'Der Betrag liegt außerhalb des erlaubten Bereichs.',
+  amount_changed: 'Der Betrag hat sich geändert (neue Gebührensätze). Bitte prüfe den Betrag und spende erneut.',
   invalid_email: 'Bitte gib eine gültige E-Mail-Adresse an.',
   email_required: 'Für eine monatliche Spende brauchen wir Deine E-Mail-Adresse.',
   invalid_platform: 'Unbekannte Plattform.',
@@ -49,6 +51,7 @@ const STATUS: Partial<Record<DonationErrorCode, number>> = {
   not_found: 404,
   not_active: 409,
   subscription_exists: 409,
+  amount_changed: 409,
   idempotency_conflict: 409,
   rate_limited: 429,
   donations_disabled: 503,
