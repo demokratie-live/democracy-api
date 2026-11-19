@@ -4,6 +4,7 @@ import { DONATION_SOURCE } from './constants';
 import { DonationError } from './errors';
 import { donationLog } from './log';
 import type { WebhookEventStore } from './models/DonationWebhookEvent';
+import { STRIPE_API_VERSION } from './stripe';
 
 /**
  * `POST /donations/v1/stripe-webhook` (contracts/stripe-webhooks.md).
@@ -65,6 +66,20 @@ export const createWebhookHandler =
     }
 
     const meta = { eventId: event.id, eventType: event.type };
+
+    // Die Form der Event-Objekte hängt von der API-Version des Endpoints ab (z. B. `invoice.parent`
+    // erst ab „basil"). Bei abweichender Version laut ablehnen statt still zu ignorieren – Stripe
+    // stellt erneut zu, sobald der Endpoint auf die richtige Version umgestellt ist.
+    if (event.api_version && event.api_version !== STRIPE_API_VERSION) {
+      donationLog.error('Webhook mit falscher Stripe-API-Version abgelehnt – Endpoint umstellen', {
+        ...meta,
+        code: `api_version ${event.api_version} != ${STRIPE_API_VERSION}`,
+      });
+      const error = new DonationError('invalid_request');
+      res.status(error.status).json(error.toBody());
+      return;
+    }
+
     const handler = handlers[event.type];
     if (!handler || !isDonationAppEvent(event)) {
       res.json({ received: true, ignored: true });

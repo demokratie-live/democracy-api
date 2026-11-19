@@ -112,11 +112,21 @@ Dashboard → Entwickler → API-Schlüssel → „Eingeschränkten Schlüssel e
 
 ### 2.4 Webhook-Endpoint
 
-Lokal: kein Dashboard-Endpoint nötig – `stripe -p democracy listen --forward-to
-localhost:3000/donations/v1/stripe-webhook`; das Secret liefert `stripe -p democracy listen
---print-secret` (✓ 2026-11-19 in lokaler `.env`). Den internal-Endpoint erst anlegen, wenn die API mit
+> **API-Version:** Das Konto steht (wegen DonorBox) auf der Standard-Version `2020-03-02`. Webhooks des
+> Spendenmoduls müssen in der Version kommen, auf die der Server gepinnt ist (`STRIPE_API_VERSION` in
+> `src/donations/stripe.ts`, derzeit `2026-10-28.endive`) – sonst fehlen z. B. `invoice.parent`-Daten.
+> Der Server lehnt abweichende Events mit `400` ab und loggt „falsche Stripe-API-Version". Beim Anlegen
+> des Endpoints deshalb die API-Version ausdrücklich wählen; die Standard-Version des Kontos **nicht**
+> ändern (betrifft DonorBox).
+
+Lokal: kein Dashboard-Endpoint nötig – `stripe -p democracy listen --latest --forward-to
+localhost:3000/donations/v1/stripe-webhook` (`--latest` liefert Events in der neuesten API-Version;
+weicht die von der gepinnten ab, lehnt der Server sie ab → dann SDK-Pin anheben oder Endpoint im
+Dashboard nutzen). Das Secret liefert `stripe -p democracy listen --print-secret` (✓ 2026-11-19 in
+lokaler `.env`). Den internal-Endpoint erst anlegen, wenn die API mit
 dem Spendenmodul auf internal läuft (sonst deaktiviert Stripe ihn nach Fehlzustellungen).
-Dashboard → Entwickler → Webhooks → Endpoint hinzufügen (URL siehe Tabelle oben), Events:
+Dashboard → Entwickler → Webhooks → Endpoint hinzufügen (URL siehe Tabelle oben), **API-Version
+`2026-10-28.endive`**, Events:
 
 ```
 payment_intent.succeeded

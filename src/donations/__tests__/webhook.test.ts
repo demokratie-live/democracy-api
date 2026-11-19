@@ -60,6 +60,19 @@ describe('POST /donations/v1/stripe-webhook', () => {
     expect(eventStore.claimed.has('evt_1')).toBe(true);
   });
 
+  it('lehnt Events in einer anderen API-Version ab, statt sie still zu ignorieren', async () => {
+    const handler = vi.fn(async () => undefined);
+    const { post, eventStore } = await setup({ 'payment_intent.succeeded': handler });
+
+    const response = await post({
+      ...event('evt_old', 'payment_intent.succeeded', ownPaymentIntent),
+      api_version: '2020-03-02',
+    });
+    expect(response.status).toBe(400);
+    expect(handler).not.toHaveBeenCalled();
+    expect(eventStore.claimed.has('evt_old')).toBe(false);
+  });
+
   it('lehnt ungültige Signaturen mit 400 ab', async () => {
     const handler = vi.fn(async () => undefined);
     const { post } = await setup({ 'payment_intent.succeeded': handler });

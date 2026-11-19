@@ -2,12 +2,15 @@ import express, { type ErrorRequestHandler, type RequestHandler, type Router } f
 import type Stripe from 'stripe';
 import { loadDonationConfig, type DonationConfig } from './config';
 import { DonationError } from './errors';
+import { createMonthlyHandlers } from './handlers/monthly';
 import { createOneTimeHandlers } from './handlers/oneTime';
 import { donationLog } from './log';
 import { createMailer, type Mailer } from './mail/mailer';
+import { mongoSubscriberStore, type SubscriberStore } from './models/DonationSubscriber';
 import { mongoWebhookEventStore, type WebhookEventStore } from './models/DonationWebhookEvent';
 import { createPaymentRateLimiter } from './rateLimit';
 import { configRoute } from './routes/config';
+import { monthlyRoute } from './routes/monthly';
 import { oneTimeRoute } from './routes/oneTime';
 import { createStripeClient } from './stripe';
 import { createWebhookHandler, type WebhookHandlers } from './webhook';
@@ -21,6 +24,7 @@ export interface DonationsDeps {
   config: DonationConfig;
   stripe: Stripe | null;
   eventStore: WebhookEventStore;
+  subscribers: SubscriberStore;
   mailer: Mailer;
   webhookHandlers: WebhookHandlers;
 }
@@ -85,7 +89,12 @@ export const createDonationsRouter = (deps: DonationsDeps): Router => {
     requireEnabled(config),
     stripe ? oneTimeRoute({ config, stripe }) : unavailable,
   );
-  router.post('/monthly', paymentLimiter, requireEnabled(config)); // Implementierung: Phase 4 (T040)
+  router.post(
+    '/monthly',
+    paymentLimiter,
+    requireEnabled(config),
+    stripe ? monthlyRoute({ config, stripe, subscribers: deps.subscribers }) : unavailable,
+  );
 
   // Unbekannte Pfade enden hier und laufen nie in Auth-Middleware oder GraphQL weiter.
   router.use((_req, res) => {
@@ -114,7 +123,13 @@ export const createDonationsRouterFromEnv = (): Router => {
     config,
     stripe,
     eventStore: mongoWebhookEventStore,
+    subscribers: mongoSubscriberStore,
     mailer,
-    webhookHandlers: stripe ? { ...createOneTimeHandlers({ stripe, mailer, config }) } : {},
+    webhookHandlers: stripe
+      ? {
+          ...createOneTimeHandlers({ stripe, mailer, config }),
+          ...createMonthlyHandlers({ stripe, mailer, config, subscribers: mongoSubscriberStore }),
+        }
+      : {},
   });
 };

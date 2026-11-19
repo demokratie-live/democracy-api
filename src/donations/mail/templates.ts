@@ -115,3 +115,110 @@ export const sepaFailedMail = ({ to, chargedAmountCents, createdAt, config }: Se
 
   return { to, subject: 'Deine Spende an DEMOCRACY konnte nicht eingezogen werden', text };
 };
+
+type MonthlyConfig = ReceiptConfig & { portalLoginUrl: string | null };
+
+const manageSection = (portalLoginUrl: string | null) =>
+  [
+    'Deine Dauerspende verwaltest Du in der DEMOCRACY-App unter „Spenden".',
+    portalLoginUrl
+      ? `Auf einem anderen Gerät geht das auch hier – mit Anmeldung per E-Mail-Link: ${portalLoginUrl}`
+      : null,
+    'Kündigen kannst Du jederzeit zum Ende des laufenden Monats.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+interface MonthlyConfirmation {
+  to: string;
+  firstPayment: boolean;
+  chargedAmountCents: number;
+  baseAmountCents: number;
+  coverFees: boolean;
+  paidAt: number;
+  nextChargeAt: number | null;
+  paymentMethodLabel: string;
+  config: MonthlyConfig;
+}
+
+export const monthlyConfirmationMail = ({
+  to,
+  firstPayment,
+  chargedAmountCents,
+  baseAmountCents,
+  coverFees,
+  paidAt,
+  nextChargeAt,
+  paymentMethodLabel,
+  config,
+}: MonthlyConfirmation): DonationMail => {
+  const surcharge = chargedAmountCents - baseAmountCents;
+  const amountLine =
+    coverFees && surcharge > 0
+      ? `${formatEuro(chargedAmountCents)} (inklusive ${formatEuro(surcharge)} freiwillig übernommener Zahlungsgebühren)`
+      : formatEuro(chargedAmountCents);
+
+  const intro = firstPayment
+    ? [
+        'vielen Dank, dass Du DEMOCRACY ab jetzt jeden Monat unterstützt! Mit Deiner Patenschaft hilfst Du,',
+        'DEMOCRACY unabhängig, überparteilich und werbefrei zu halten.',
+      ]
+    : ['vielen Dank für Deine monatliche Spende – schön, dass Du dabei bist!'];
+
+  const text = [
+    'Hallo,',
+    '',
+    ...intro,
+    '',
+    'Deine Spende',
+    `  Betrag:      ${amountLine}`,
+    `  Rhythmus:    monatlich`,
+    `  Datum:       ${formatDate(paidAt)}`,
+    nextChargeAt ? `  Nächste Abbuchung: ${formatDate(nextChargeAt)}` : null,
+    `  Zahlungsart: ${paymentMethodLabel}`,
+    `  Empfänger:   ${config.receipt.organization}`,
+    '',
+    taxSection(config),
+    '',
+    manageSection(config.portalLoginUrl),
+    '',
+    footer(config),
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  return {
+    to,
+    subject: firstPayment
+      ? 'Willkommen als Pat:in – danke für Deine monatliche Spende'
+      : 'Danke für Deine monatliche Spende an DEMOCRACY',
+    text,
+  };
+};
+
+interface MonthlyEnded {
+  to: string;
+  reason: 'cancellation_requested' | 'payment_failed' | 'other';
+  config: ReceiptConfig;
+}
+
+export const monthlyEndedMail = ({ to, reason, config }: MonthlyEnded): DonationMail => {
+  const why =
+    reason === 'payment_failed'
+      ? 'Die letzten Abbuchungen sind leider fehlgeschlagen, deshalb haben wir Deine Dauerspende beendet.'
+      : 'Deine Dauerspende ist wie gewünscht beendet.';
+  const text = [
+    'Hallo,',
+    '',
+    `${why} Es werden keine weiteren Beträge abgebucht.`,
+    '',
+    'Vielen Dank für Deine bisherige Unterstützung! Wenn Du DEMOCRACY wieder unterstützen möchtest, geht',
+    'das jederzeit in der DEMOCRACY-App unter „Spenden" oder per Dauerauftrag:',
+    `  Kontoinhaber: ${config.bankTransfer.holder}`,
+    `  IBAN:         ${config.bankTransfer.iban}`,
+    `  BIC:          ${config.bankTransfer.bic}`,
+    '',
+    footer(config),
+  ].join('\n');
+  return { to, subject: 'Deine Dauerspende an DEMOCRACY ist beendet', text };
+};

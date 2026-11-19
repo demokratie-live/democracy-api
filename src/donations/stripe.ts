@@ -4,7 +4,7 @@ import Stripe from 'stripe';
  * Fest gepinnte Stripe-API-Version (research.md R3: mindestens „basil" wegen
  * `latest_invoice.confirmation_secret`). Ein Update ist eine bewusste Änderung mit Tests.
  */
-const STRIPE_API_VERSION = '2026-10-28.endive' as const;
+export const STRIPE_API_VERSION = '2026-10-28.endive' as const;
 
 export const createStripeClient = (secretKey: string): Stripe =>
   new Stripe(secretKey, {
