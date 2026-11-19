@@ -17,7 +17,7 @@ import { validateAmountCents, validateIdempotencyKey } from '../validation';
  */
 
 /** Rücksprung aus dem Kundenportal in die App (In-App-Browser fängt die URL ab). */
-export const PORTAL_RETURN_URL = 'democracy://donate/manage';
+const PORTAL_RETURN_URL = 'democracy://donate/manage';
 
 type PublicStatus = 'incomplete' | 'active' | 'past_due' | 'canceled' | 'incomplete_expired';
 const STATUS: Record<Stripe.Subscription.Status, PublicStatus> = {
