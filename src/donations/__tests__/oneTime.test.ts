@@ -53,7 +53,8 @@ describe('POST /donations/v1/one-time', () => {
     const stripe = fakeStripe({
       customers: [
         { id: 'cus_donorbox', metadata: {} },
-        { id: 'cus_own', metadata: { source: 'democracy-app' } },
+        { id: 'cus_monthly', metadata: { source: 'democracy-app', kind: 'monthly' } },
+        { id: 'cus_own', metadata: { source: 'democracy-app', kind: 'one_time' } },
       ],
     });
     const post = await start(stripe);
@@ -97,7 +98,11 @@ describe('POST /donations/v1/one-time', () => {
 
     expect((await post(body)).status).toBe(200);
     expect(stripe.customers.create).toHaveBeenCalledWith(
-      { email: 'spender@example.org', preferred_locales: ['de'], metadata: { source: 'democracy-app' } },
+      {
+        email: 'spender@example.org',
+        preferred_locales: ['de'],
+        metadata: { source: 'democracy-app', kind: 'one_time' },
+      },
       { idempotencyKey: `${IDEMPOTENCY_KEY}:customer` },
     );
     expect(stripe.paymentIntents.create.mock.calls[0][0]).toMatchObject({ customer: 'cus_new' });

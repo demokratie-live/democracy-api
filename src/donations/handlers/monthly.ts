@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import type { DonationConfig } from '../config';
 import { DONATION_SOURCE } from '../constants';
+import { chargedAmountCents } from '../fees';
 import { donationLog } from '../log';
 import type { Mailer } from '../mail/mailer';
 import { monthlyCancellationConfirmedMail, monthlyConfirmationMail, monthlyEndedMail } from '../mail/templates';
@@ -41,6 +42,24 @@ const wasScheduled = (subscription: Stripe.Subscription): boolean =>
   subscription.cancel_at_period_end ||
   Boolean(subscription.canceled_at && subscription.ended_at && subscription.ended_at - subscription.canceled_at > 60);
 
+/**
+ * Grundbetrag und Gebührenübernahme aus den (bei Rechnungsabschluss kopierten) Subscription-Metadaten –
+ * aber nur, wenn sie zum tatsächlich gezahlten Betrag passen. Ändert jemand den Betrag, während die
+ * Folgerechnung noch als Entwurf mit dem alten Betrag liegt, oder ändern sich die Gebührensätze,
+ * passen sie nicht mehr; dann nennen Mail und Export nur den gezahlten Betrag ohne Aufschlüsselung.
+ */
+const amountBreakdown = (metadata: Record<string, string>, amountPaid: number, config: DonationConfig) => {
+  const base = Number(metadata.base_amount);
+  const coverFees = metadata.cover_fees === 'true';
+  const consistent =
+    Number.isInteger(base) &&
+    base > 0 &&
+    chargedAmountCents(base, { coverFees, interval: 'monthly' }, config.fees) === amountPaid;
+  return consistent
+    ? { baseAmountCents: base, coverFees }
+    : { baseAmountCents: amountPaid, coverFees: false, unknown: true };
+};
+
 const isOwnMonthly = (subscription: Stripe.Subscription): boolean =>
   subscription.metadata?.source === DONATION_SOURCE && subscription.metadata?.interval === 'monthly';
 
@@ -55,7 +74,7 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
   /** Fehler hier dürfen die Bestätigung nicht verhindern (sonst Wiederholung → doppelte Mail). */
   const tagInvoicePayment = async (
     invoice: Stripe.Invoice,
-    metadata: Record<string, string>,
+    breakdown: ReturnType<typeof amountBreakdown>,
     subscriptionId: string,
   ) => {
     try {
@@ -67,8 +86,8 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
         metadata: {
           source: DONATION_SOURCE,
           interval: 'monthly',
-          base_amount: metadata.base_amount ?? '',
-          cover_fees: metadata.cover_fees ?? '',
+          base_amount: 'unknown' in breakdown ? '' : String(breakdown.baseAmountCents),
+          cover_fees: 'unknown' in breakdown ? '' : String(breakdown.coverFees),
           subscription: subscriptionId,
         },
       });
@@ -104,7 +123,8 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
       const subscriptionId = subscriptionIdOfInvoice(invoice);
       if (!subscriptionId) return;
 
-      await tagInvoicePayment(invoice, metadata, subscriptionId);
+      const breakdown = amountBreakdown(metadata, invoice.amount_paid, config);
+      await tagInvoicePayment(invoice, breakdown, subscriptionId);
       const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
         expand: ['default_payment_method'],
       });
@@ -120,10 +140,12 @@ export const createMonthlyHandlers = ({ stripe, mailer, config, subscribers }: D
           to,
           firstPayment: invoice.billing_reason === 'subscription_create',
           chargedAmountCents: invoice.amount_paid,
-          baseAmountCents: Number(metadata.base_amount) || invoice.amount_paid,
-          coverFees: metadata.cover_fees === 'true',
+          baseAmountCents: breakdown.baseAmountCents,
+          coverFees: breakdown.coverFees,
           paidAt: invoice.status_transitions?.paid_at ?? event.created,
-          nextChargeAt: line?.period?.end ?? null,
+          // Schon gekündigt (z. B. vor Eingang der ersten Lastschrift): keine „nächste Abbuchung" nennen.
+          nextChargeAt:
+            subscription.cancel_at_period_end || subscription.cancel_at ? null : (line?.period?.end ?? null),
           paymentMethodLabel: paymentMethodLabel(
             (subscription.default_payment_method as Stripe.PaymentMethod | null) ?? null,
           ),

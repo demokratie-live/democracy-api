@@ -73,6 +73,24 @@ describe('POST /donations/v1/stripe-webhook', () => {
     expect(eventStore.claimed.has('evt_old')).toBe(false);
   });
 
+  it('antwortet bei paralleler Verarbeitung mit 409, damit Stripe später erneut zustellt', async () => {
+    let finish: () => void = () => undefined;
+    const handler = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    const { post, eventStore } = await setup({ 'payment_intent.succeeded': handler });
+
+    const first = post(event('evt_busy', 'payment_intent.succeeded', ownPaymentIntent));
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+    const parallel = await post(event('evt_busy', 'payment_intent.succeeded', ownPaymentIntent));
+    expect(parallel.status).toBe(409);
+
+    finish();
+    expect((await first).status).toBe(200);
+    expect(eventStore.done.has('evt_busy')).toBe(true);
+    const later = await post(event('evt_busy', 'payment_intent.succeeded', ownPaymentIntent));
+    expect(await readJson(later)).toEqual({ received: true, duplicate: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('lehnt ungültige Signaturen mit 400 ab', async () => {
     const handler = vi.fn(async () => undefined);
     const { post } = await setup({ 'payment_intent.succeeded': handler });

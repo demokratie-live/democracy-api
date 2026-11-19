@@ -45,7 +45,13 @@ export interface DonationConfig {
   fees: DonationFeeConfig;
   bankTransfer: { holder: string; iban: string; bic: string };
   legal: { privacyUrl: string; nonprofitProofUrl: string; simplifiedReceiptUrl: string };
-  mail: { smtpUrl: string | null; from: string; replyTo: string | null };
+  mail: {
+    smtpUrl: string | null;
+    from: string;
+    replyTo: string | null;
+    /** Testmodus: Mails nur an diese Domains/Adressen (Kleinbuchstaben). Live: ohne Bedeutung. */
+    testRecipients: string[];
+  };
   /**
    * Angaben für die Spendenbestätigung (FR-018, vereinfachter Zuwendungsnachweis).
    * `exemption` (Finanzamt, Datum, Steuernummer des Freistellungsbescheids) wird bewusst nicht
@@ -100,7 +106,7 @@ const parseIntegerList = (env: Env, key: string, fallback: number[], problems: s
   return parts.map(Number);
 };
 
-const keyMode = (key: string | null): 'test' | 'live' | null => {
+export const keyMode = (key: string | null): 'test' | 'live' | null => {
   if (!key) return null;
   if (/^(sk|rk|pk)_test_/.test(key)) return 'test';
   if (/^(sk|rk|pk)_live_/.test(key)) return 'live';
@@ -167,6 +173,10 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       smtpUrl: nonEmpty(env.SMTP_URL),
       from: nonEmpty(env.DONATION_MAIL_FROM) ?? 'DEMOCRACY Spenden <spenden@democracy-deutschland.de>',
       replyTo: nonEmpty(env.DONATION_MAIL_REPLY_TO),
+      testRecipients: (nonEmpty(env.DONATION_TEST_MAIL_ALLOWLIST) ?? '')
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean),
     },
   };
 
@@ -197,6 +207,10 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       ['STRIPE_WEBHOOK_SECRET', config.stripe.webhookSecret],
       ['STRIPE_DONATION_PRODUCT_ID', config.stripe.donationProductId],
       ['STRIPE_PAYMENT_METHOD_CONFIGURATION_ID', config.stripe.paymentMethodConfigurationId],
+      // Eigene Portal-Konfiguration, sonst gilt das Standardportal des Kontos (geteilt mit DonorBox).
+      ['STRIPE_PORTAL_CONFIGURATION_ID', config.stripe.portalConfigurationId],
+      // Ohne SMTP gingen Spendenbestätigungen stillschweigend verloren (Events gelten als verarbeitet).
+      ['SMTP_URL', config.mail.smtpUrl],
     ];
     for (const [key, value] of required) {
       if (!value) problems.push(`${key} fehlt, obwohl DONATIONS_ENABLED=true`);

@@ -7,7 +7,7 @@ import { DonationError } from '../errors';
 import { chargedAmountCents } from '../fees';
 import { donationLog } from '../log';
 import type { SubscriberStore } from '../models/DonationSubscriber';
-import { findOrCreateDonor, stripeErrorCode, toDonationError } from '../stripeHelpers';
+import { stripeErrorCode, toDonationError } from '../stripeHelpers';
 import { validateDonationRequest, validateIdempotencyKey } from '../validation';
 
 /**
@@ -19,8 +19,12 @@ import { validateDonationRequest, validateIdempotencyKey } from '../validation';
  * PaymentSheet selbst mit der gewählten Zahlungsart (Stripe-Muster „deferred intent + subscription");
  * `save_default_payment_method` macht sie danach zur Standard-Zahlungsart der Dauerspende.
  *
- * Duplikatsperre: aktive/überfällige Dauerspende des Schlüssels → 409. Eine noch unbezahlte
- * (`incomplete`) Subscription – z. B. erste Karte abgelehnt – wird gekündigt und ersetzt.
+ * Duplikatsperre: aktive/überfällige Dauerspende des Schlüssels → 409 (außer sie ist schon zum
+ * Periodenende gekündigt). Eine noch unbezahlte (`incomplete`) Subscription – z. B. erste Karte
+ * abgelehnt – wird gekündigt und ersetzt, außer es ist die Wiederholung desselben Requests.
+ *
+ * Customer: einer je Spender-Schlüssel. Nie per E-Mail einen bestehenden Customer übernehmen – die
+ * E-Mail ist unbestätigt, und der Schlüssel öffnet das Kundenportal dieses Customers.
  */
 
 const BLOCKING_STATUSES = new Set<Stripe.Subscription.Status>(['active', 'past_due', 'trialing', 'unpaid', 'paused']);
@@ -50,17 +54,35 @@ export const monthlyRoute =
         const existing = await subscribers.findByKeyHash(keyHash);
         if (existing?.stripeSubscriptionId && !existing.endedAt) {
           const current = await stripe.subscriptions.retrieve(existing.stripeSubscriptionId);
-          if (BLOCKING_STATUSES.has(current.status)) {
+          const scheduledToEnd = current.cancel_at_period_end || current.cancel_at !== null;
+          if (BLOCKING_STATUSES.has(current.status) && !scheduledToEnd) {
             throw new DonationError('subscription_exists');
           }
-          if (current.status === 'incomplete') {
+          // Wiederholung desselben Requests (Antwort ging verloren): nicht kündigen – Stripe liefert
+          // für denselben Idempotency-Key ohnehin dieselbe Subscription zurück.
+          if (current.status === 'incomplete' && current.metadata?.request_id !== idempotencyKey) {
             await stripe.subscriptions.cancel(current.id);
             donationLog.info('Unbezahlte Dauerspende ersetzt', { stripeId: current.id });
           }
         }
 
-        const customer = await findOrCreateDonor(stripe, input.email as string, idempotencyKey);
-        const subscriber = await subscribers.upsert(keyHash, customer);
+        const email = input.email as string;
+        let subscriber = existing;
+        if (subscriber) {
+          // Der Schlüssel gehört zu diesem Customer – eine geänderte E-Mail übernehmen.
+          await stripe.customers.update(
+            subscriber.stripeCustomerId,
+            { email },
+            { idempotencyKey: `${idempotencyKey}:customer-email` },
+          );
+        } else {
+          const created = await stripe.customers.create(
+            { email, preferred_locales: ['de'], metadata: { source: DONATION_SOURCE, kind: 'monthly' } },
+            { idempotencyKey: `${idempotencyKey}:customer` },
+          );
+          subscriber = await subscribers.insert(keyHash, created.id);
+        }
+        const customer = subscriber.stripeCustomerId;
 
         const subscription = await stripe.subscriptions.create(
           {
@@ -86,12 +108,24 @@ export const monthlyRoute =
               platform: input.platform,
               app_version: input.appVersion ?? '',
               subscriber_id: subscriber.id,
+              request_id: idempotencyKey,
             },
             expand: ['latest_invoice.confirmation_secret'],
           },
           { idempotencyKey: `${idempotencyKey}:subscription` },
         );
-        await subscribers.setSubscription(subscriber.id, subscription.id);
+        const linked = await subscribers.linkSubscription(
+          subscriber.id,
+          subscription.id,
+          existing?.stripeSubscriptionId ?? null,
+        );
+        if (!linked) {
+          // Ein paralleler Request hat dem Schlüssel inzwischen eine andere Dauerspende zugeordnet –
+          // diese hier darf nicht verwaist weiterlaufen.
+          await stripe.subscriptions.cancel(subscription.id).catch(() => undefined);
+          donationLog.warn('Paralleler Request: Dauerspende verworfen', { stripeId: subscription.id });
+          throw new DonationError('idempotency_conflict');
+        }
 
         const invoice = subscription.latest_invoice as Stripe.Invoice | null;
         const clientSecret = invoice?.confirmation_secret?.client_secret;

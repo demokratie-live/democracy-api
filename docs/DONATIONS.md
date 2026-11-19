@@ -164,7 +164,12 @@ Dashboard → Einstellungen → Billing → Kundenportal:
 - Test: eigene Konfiguration „DEMOCRACY App" `bpc_1UdSNXLGpvKcZpqcJ10Y76O7` per API angelegt
   (Zahlungsart ändern, Rechnungen, E-Mail ändern, Kündigen zum Periodenende, kein Tarifwechsel,
   Login-Link `https://billing.stripe.com/p/login/test_6oU00k0E10gMcSFd8d1kA00`). Das Standardportal
-  bleibt unverändert. Live analog anlegen → `STRIPE_PORTAL_CONFIGURATION_ID`.
+  bleibt unverändert. Live analog anlegen → `STRIPE_PORTAL_CONFIGURATION_ID` (Pflicht, sonst startet das
+  Modul nicht).
+- **Ein Stripe-Customer je Spender-Schlüssel:** Dauerspenden übernehmen nie einen bestehenden Customer per
+  E-Mail (die E-Mail ist unbestätigt, der Schlüssel öffnet das Portal dieses Customers). Wer auf zwei
+  Geräten je eine Dauerspende einrichtet, hat deshalb zwei Customers mit derselben E-Mail. **Beim ersten
+  Test prüfen**, wie der Portal-Login per E-Mail-Link damit umgeht.
 
 ### 2.7 Branding und Abrechnungstexte
 Dashboard → Einstellungen → Branding / Öffentliche Unternehmensdaten:
@@ -213,10 +218,26 @@ im Client-Repo: `docs/deployment/IOS.md` und `docs/deployment/ANDROID.md` (Absch
   E-Mail-Benachrichtigungen: Dashboard → Einstellungen → Persönliche Daten → **Kommunikations-
   einstellungen** → für den Kassenwart „Rückbuchungen/Disputes", „Erfolgreiche Zahlungen" (optional)
   und „Fehlgeschlagene Zahlungen" aktivieren. Rückbuchungen haben eine Antwortfrist.
-- **Rate-Limit:** 10 Zahlungsversuche je 10 Minuten und Client, gezählt **pro Pod** im Speicher
-  (Produktion: 10 Replicas → im ungünstigsten Fall bis zu 100). Der Zählerschlüssel ist ein
+- **Rate-Limit:** 30 Zahlungsversuche (Verwalten: 60 Anfragen) je 10 Minuten und Client, gezählt
+  **pro Pod** im Speicher (Produktion: 10 Replicas → im ungünstigsten Fall das Zehnfache). 30 statt 10,
+  weil viele Mobilfunkkund:innen sich eine IPv4 teilen (Carrier-NAT). Der Zählerschlüssel ist ein
   gesalzener IP-Hash; IPs werden nicht gespeichert. Hauptschutz gegen Card-Testing sind Stripe Radar
   und der Mindestbetrag; bei Missbrauch Radar-Regeln verschärfen.
+- **Fehlerhafte Konfiguration:** Ist eine Spenden-Variable ungültig (z. B. `DONATION_FEE_CARD_PCT=1,5`),
+  startet die API trotzdem; das Spendenmodul antwortet dann auf alles mit `503 donations_disabled` und
+  loggt „Spendenmodul deaktiviert – Konfiguration ungültig" mit den Problemen (ohne Werte).
+- **Testmodus-Mails:** Mit Stripe-Testschlüssel (internal) gehen Bestätigungen nur an
+  `DONATION_TEST_MAIL_ALLOWLIST` – dort kann jeder mit Testkarten „spenden", ohne Liste ließe sich der
+  Vereins-Absender als Spam-Schleuder missbrauchen.
+- **Webhook-Verarbeitung:** Ein Event gilt erst nach erfolgreicher Verarbeitung als erledigt. Läuft es
+  parallel noch, antwortet der Server `409` (Stripe stellt später erneut zu); bleibt eine Verarbeitung
+  hängen (Pod beendet), übernimmt ein Retry nach 5 Minuten. Events mit falscher API-Version lehnt der
+  Server ab – Stripe-Retries behalten die alte Version, solche Events sind verloren. Deshalb den
+  Endpoint **vor** dem Einschalten mit der richtigen Version anlegen.
+- **Ingress-Logs:** Das Access-Log ist für `/donations` aus. Das **Error-Log** von ingress-nginx
+  enthält bei Upstream-Fehlern (502/504, z. B. während eines Rollouts) aber weiterhin Client-IP und
+  Pfad. Eine Abschaltung je Location ginge nur per Snippet-Annotation (im Cluster oft gesperrt);
+  bewusst als Restrisiko dokumentiert.
 - **Monatsexport für die Buchhaltung (T061):** Dashboard → **Berichte → Saldo** → Zeitraum = Monat →
   Detailbericht **„Saldoänderungen aus Aktivität" (Itemized balance change from activity)** →
   „Spalten" → zusätzlich `payment_method_type`, `customer_email`, `subscription_id` sowie die

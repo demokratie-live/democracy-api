@@ -8,6 +8,8 @@ const stripeTestEnv = {
   STRIPE_WEBHOOK_SECRET: 'whsec_abc',
   STRIPE_DONATION_PRODUCT_ID: 'prod_abc',
   STRIPE_PAYMENT_METHOD_CONFIGURATION_ID: 'pmc_abc',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_abc',
+  SMTP_URL: 'smtp://mail.example.org:587',
 };
 
 const problemsOf = (env: Record<string, string>) => {
@@ -60,6 +62,20 @@ describe('loadDonationConfig', () => {
     expect(problemsOf({ ...stripeTestEnv, STRIPE_PUBLISHABLE_KEY: 'pk_live_abc' })).toEqual([
       expect.stringContaining('unterschiedlichen Modi'),
     ]);
+  });
+
+  it.each(['SMTP_URL', 'STRIPE_PORTAL_CONFIGURATION_ID'])('verlangt %s, wenn das Modul aktiv ist', (key) => {
+    const env: Record<string, string> = { ...stripeTestEnv };
+    delete env[key];
+    expect(problemsOf(env)).toEqual([expect.stringContaining(`${key} fehlt`)]);
+  });
+
+  it('liest die Freigabeliste für Testmails (Domains/Adressen, kleingeschrieben)', () => {
+    const config = loadDonationConfig({
+      ...stripeTestEnv,
+      DONATION_TEST_MAIL_ALLOWLIST: ' Example.org, team@Democracy-Deutschland.de ',
+    });
+    expect(config.mail.testRecipients).toEqual(['example.org', 'team@democracy-deutschland.de']);
   });
 
   it('lehnt einen Publishable Key als Secret Key ab', () => {

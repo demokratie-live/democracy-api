@@ -23,7 +23,12 @@ const dailySalt = (now: Date): string => {
 export const hashClientKey = (normalizedIp: string, now = new Date()): string =>
   crypto.createHash('sha256').update(dailySalt(now)).update(normalizedIp).digest('hex');
 
-export const createPaymentRateLimiter = ({ windowMs = 10 * 60 * 1000, limit = 10 } = {}) =>
+/**
+ * 30 Zahlungsversuche je 10 Minuten und Client: genug für Wiederholungen im Zahlungsfenster und für
+ * viele Spender:innen hinter einer gemeinsamen Mobilfunk-IPv4 (Carrier-NAT). Hauptschutz gegen
+ * Card-Testing bleibt Stripe Radar.
+ */
+export const createPaymentRateLimiter = ({ windowMs = 10 * 60 * 1000, limit = 30 } = {}) =>
   rateLimit({
     windowMs,
     limit,
@@ -36,3 +41,7 @@ export const createPaymentRateLimiter = ({ windowMs = 10 * 60 * 1000, limit = 10
       res.status(error.status).json(error.toBody());
     },
   });
+
+/** Verwaltungsendpunkte: großzügig für normale Nutzung, aber keine Dauerschleife gegen die Stripe-API. */
+export const createManageRateLimiter = ({ windowMs = 10 * 60 * 1000, limit = 60 } = {}) =>
+  createPaymentRateLimiter({ windowMs, limit });

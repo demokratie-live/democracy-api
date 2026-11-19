@@ -16,13 +16,24 @@ afterEach(async () => {
   close = undefined;
 });
 
-const fakeStripe = ({ existingStatus = null as Stripe.Subscription.Status | null } = {}) => ({
+const fakeStripe = ({
+  existingStatus = null as Stripe.Subscription.Status | null,
+  existingMetadata = {} as Record<string, string>,
+  existingCancelAtPeriodEnd = false,
+} = {}) => ({
   customers: {
-    list: vi.fn(async () => ({ data: [] })),
+    list: vi.fn(async () => ({ data: [{ id: 'cus_victim', metadata: { source: 'democracy-app', kind: 'monthly' } }] })),
     create: vi.fn(async () => ({ id: 'cus_new' })),
+    update: vi.fn(async (id: string) => ({ id })),
   },
   subscriptions: {
-    retrieve: vi.fn(async (id: string) => ({ id, status: existingStatus })),
+    retrieve: vi.fn(async (id: string) => ({
+      id,
+      status: existingStatus,
+      metadata: existingMetadata,
+      cancel_at_period_end: existingCancelAtPeriodEnd,
+      cancel_at: null,
+    })),
     cancel: vi.fn(async (id: string) => ({ id, status: 'incomplete_expired' })),
     create: vi.fn(async (params: { items: { price_data: { unit_amount: number } }[] }) => ({
       id: 'sub_new',
@@ -85,6 +96,12 @@ describe('POST /donations/v1/monthly (T037)', () => {
       currentPeriodEnd: '2027-01-01T00:00:00.000Z',
     });
 
+    // Eigener Customer je Schlüssel – nie per E-Mail einen bestehenden übernehmen.
+    expect(stripe.customers.list).not.toHaveBeenCalled();
+    expect(stripe.customers.create).toHaveBeenCalledWith(
+      { email: 'pate@example.org', preferred_locales: ['de'], metadata: { source: 'democracy-app', kind: 'monthly' } },
+      { idempotencyKey: `${IDEMPOTENCY_KEY}:customer` },
+    );
     expect(stripe.subscriptions.create).toHaveBeenCalledWith(
       {
         customer: 'cus_new',
@@ -104,6 +121,7 @@ describe('POST /donations/v1/monthly (T037)', () => {
           platform: 'android',
           app_version: '1.6.0',
           subscriber_id: 'sub-entry-1',
+          request_id: IDEMPOTENCY_KEY,
         },
         expand: ['latest_invoice.confirmation_secret'],
       },
@@ -154,14 +172,65 @@ describe('POST /donations/v1/monthly (T037)', () => {
     },
   );
 
-  it('ersetzt eine unbezahlte (incomplete) Subscription beim erneuten Versuch', async () => {
-    const stripe = fakeStripe({ existingStatus: 'incomplete' });
+  it('ersetzt eine unbezahlte (incomplete) Subscription beim erneuten Versuch und behält den Customer', async () => {
+    const stripe = fakeStripe({ existingStatus: 'incomplete', existingMetadata: { request_id: 'anderer-versuch' } });
+    const { post, subscribers } = await start(stripe, [existingEntry('sub_old')]);
+
+    const response = await post({ ...body, email: 'neu@example.org' });
+    expect(response.status).toBe(200);
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith('sub_old');
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    expect(stripe.customers.update).toHaveBeenCalledWith(
+      'cus_old',
+      { email: 'neu@example.org' },
+      { idempotencyKey: `${IDEMPOTENCY_KEY}:customer-email` },
+    );
+    expect(stripe.subscriptions.create.mock.calls[0][0]).toMatchObject({ customer: 'cus_old' });
+    expect(subscribers.entries.get(KEY_HASH)?.stripeSubscriptionId).toBe('sub_new');
+  });
+
+  it('kündigt bei der Wiederholung desselben Requests (Antwort verloren) nichts', async () => {
+    const stripe = fakeStripe({ existingStatus: 'incomplete', existingMetadata: { request_id: IDEMPOTENCY_KEY } });
+    // Stripe liefert für denselben Idempotency-Key dieselbe Subscription zurück.
+    stripe.subscriptions.create.mockImplementationOnce(async () => ({
+      id: 'sub_old',
+      status: 'incomplete',
+      items: { data: [{ current_period_end: PERIOD_END, price: { unit_amount: 539 } }] },
+      latest_invoice: { id: 'in_1', confirmation_secret: { client_secret: 'pi_old_secret', type: 'payment_intent' } },
+    }));
+    const { post } = await start(stripe, [existingEntry('sub_old')]);
+
+    const response = await post(body);
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).clientSecret).toBe('pi_old_secret');
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it('erlaubt eine neue Dauerspende, wenn die bestehende schon zum Periodenende gekündigt ist', async () => {
+    const stripe = fakeStripe({ existingStatus: 'active', existingCancelAtPeriodEnd: true });
     const { post, subscribers } = await start(stripe, [existingEntry('sub_old')]);
 
     const response = await post(body);
     expect(response.status).toBe(200);
-    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith('sub_old');
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
     expect(subscribers.entries.get(KEY_HASH)?.stripeSubscriptionId).toBe('sub_new');
+  });
+
+  it('verwirft die eigene Subscription, wenn ein paralleler Request schneller war', async () => {
+    const stripe = fakeStripe();
+    const { post, subscribers } = await start(stripe);
+    // Während dieser Request bei Stripe wartet, ordnet ein paralleler Request eine andere Subscription zu.
+    const original = subscribers.linkSubscription.bind(subscribers);
+    subscribers.linkSubscription = async (id, subscriptionId) => {
+      await original(id, 'sub_parallel', null);
+      return original(id, subscriptionId, null);
+    };
+
+    const response = await post(body);
+    expect(response.status).toBe(409);
+    expect((await readJson(response)).error.code).toBe('idempotency_conflict');
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith('sub_new');
+    expect(subscribers.entries.get(KEY_HASH)?.stripeSubscriptionId).toBe('sub_parallel');
   });
 
   it('erlaubt nach beendeter Dauerspende eine neue', async () => {

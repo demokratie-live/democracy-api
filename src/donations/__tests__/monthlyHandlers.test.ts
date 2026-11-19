@@ -54,7 +54,7 @@ const setup = ({ paidInvoices = 1 } = {}) => {
     invoicePayments: {
       list: vi.fn(async () => ({ data: [{ status: 'paid', payment: { payment_intent: 'pi_inv_1' } }] })),
     },
-    paymentIntents: { update: vi.fn(async () => ({ id: 'pi_inv_1' })) },
+    paymentIntents: { update: vi.fn(async (_id: string, _params: unknown) => ({ id: 'pi_inv_1' })) },
   };
   const mailer = { send: vi.fn(async (_mail: Mail) => undefined) };
   const subscribers = createMemorySubscriberStore([
@@ -101,6 +101,28 @@ describe('Webhook-Handler Dauerspende (T041/T042)', () => {
     stripe.paymentIntents.update.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'resource_missing' }));
     await handlers['invoice.paid']!(event('invoice.paid', invoice()));
     expect(mailer.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('nennt keine Gebühren-Aufschlüsselung, wenn die Metadaten nicht zum gezahlten Betrag passen', async () => {
+    const { handlers, sentMail, stripe } = setup();
+    // Betrag wurde geändert, während die Rechnung noch mit dem alten Betrag (10,41 €) als Entwurf lag.
+    await handlers['invoice.paid']!(event('invoice.paid', invoice({ amount_paid: 1041 })));
+    expect(sentMail().text).toMatch(/Betrag:\s+10,41\s€\n/);
+    expect(sentMail().text).not.toContain('freiwillig übernommener');
+    expect(stripe.paymentIntents.update.mock.calls[0][1]).toMatchObject({
+      metadata: { base_amount: '', cover_fees: '' },
+    });
+  });
+
+  it('nennt keine nächste Abbuchung, wenn die Dauerspende schon gekündigt ist', async () => {
+    const { handlers, sentMail, stripe } = setup();
+    stripe.subscriptions.retrieve.mockResolvedValueOnce({
+      id: 'sub_1',
+      cancel_at_period_end: true,
+      default_payment_method: { type: 'sepa_debit', sepa_debit: { last4: '3000' }, billing_details: {} },
+    } as never);
+    await handlers['invoice.paid']!(event('invoice.paid', invoice()));
+    expect(sentMail().text).not.toContain('Nächste Abbuchung');
   });
 
   it('bestätigt Folgeabbuchungen ohne Willkommenstext', async () => {

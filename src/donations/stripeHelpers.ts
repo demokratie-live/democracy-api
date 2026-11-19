@@ -3,16 +3,20 @@ import { DONATION_SOURCE } from './constants';
 import { DonationError } from './errors';
 
 /**
- * Sucht die Spender:in per E-Mail unter den von der App angelegten Stripe-Customers oder legt sie an
- * (data-model.md §2). Customers anderer Herkunft (z. B. DonorBox) werden nie wiederverwendet.
+ * Einzelspenden: sucht die Spender:in per E-Mail unter den von der App für **Einzelspenden** angelegten
+ * Customers oder legt sie an (data-model.md §2). Customers anderer Herkunft (DonorBox) und die
+ * Customers von Dauerspenden (einer je Spender-Schlüssel, `kind: monthly`) werden nie wiederverwendet –
+ * sonst ließe sich über eine fremde E-Mail an ein Kundenkonto mit Portalzugang andocken.
  */
 export const findOrCreateDonor = async (stripe: Stripe, email: string, idempotencyKey: string): Promise<string> => {
   const existing = await stripe.customers.list({ email, limit: 10 });
-  const own = existing.data.find((customer) => customer.metadata?.source === DONATION_SOURCE);
+  const own = existing.data.find(
+    (customer) => customer.metadata?.source === DONATION_SOURCE && customer.metadata?.kind === 'one_time',
+  );
   if (own) return own.id;
 
   const created = await stripe.customers.create(
-    { email, preferred_locales: ['de'], metadata: { source: DONATION_SOURCE } },
+    { email, preferred_locales: ['de'], metadata: { source: DONATION_SOURCE, kind: 'one_time' } },
     { idempotencyKey: `${idempotencyKey}:customer` },
   );
   return created.id;

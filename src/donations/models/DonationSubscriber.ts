@@ -34,10 +34,16 @@ export interface DonationSubscriber {
 
 export interface SubscriberStore {
   findByKeyHash(keyHash: string): Promise<DonationSubscriber | null>;
-  /** Legt den Eintrag an oder aktualisiert Customer und setzt ihn wieder auf „nicht beendet". */
-  upsert(keyHash: string, stripeCustomerId: string): Promise<DonationSubscriber>;
-  /** Setzt die aktuelle Subscription und hebt einen evtl. „beendet"-Status auf. */
-  setSubscription(id: string, stripeSubscriptionId: string): Promise<void>;
+  /**
+   * Legt den Eintrag für einen neuen Schlüssel an. Gibt es ihn (paralleler Request) schon, bleibt er
+   * unverändert und wird zurückgegeben – ein bestehender Eintrag wechselt nie den Customer.
+   */
+  insert(keyHash: string, stripeCustomerId: string): Promise<DonationSubscriber>;
+  /**
+   * Ordnet die Subscription zu, aber nur, wenn der Eintrag noch auf `expected` zeigt (Vergleichen und
+   * Setzen gegen parallele Requests). Hebt einen „beendet"-Status auf. `false` = Race verloren.
+   */
+  linkSubscription(id: string, stripeSubscriptionId: string, expected: string | null): Promise<boolean>;
   /** Markiert die Dauerspende als beendet – nur, wenn es die aktuelle Subscription des Eintrags ist. */
   markEnded(stripeSubscriptionId: string, endedAt: Date): Promise<boolean>;
 }
@@ -63,21 +69,24 @@ export const mongoSubscriberStore: SubscriberStore = {
     const doc = await DonationSubscriberModel.findOne({ keyHash }).lean();
     return doc ? toSubscriber(doc as SubscriberDocument) : null;
   },
-  async upsert(keyHash, stripeCustomerId) {
+  async insert(keyHash, stripeCustomerId) {
     const doc = await DonationSubscriberModel.findOneAndUpdate(
       { keyHash },
-      { $set: { stripeCustomerId, endedAt: null, deleteAt: null } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { $setOnInsert: { keyHash, stripeCustomerId, stripeSubscriptionId: null, endedAt: null, deleteAt: null } },
+      { upsert: true, new: true },
     ).lean();
     return toSubscriber(doc as SubscriberDocument);
   },
-  async setSubscription(id, stripeSubscriptionId) {
+  async linkSubscription(id, stripeSubscriptionId, expected) {
     // endedAt zurücksetzen: Ein „beendet"-Webhook der ersetzten (incomplete) Subscription kann vor
     // diesem Aufruf eingetroffen sein und den Eintrag sonst fälschlich als beendet markieren.
-    await DonationSubscriberModel.updateOne(
-      { _id: id },
+    const result = await DonationSubscriberModel.updateOne(
+      { _id: id, stripeSubscriptionId: expected },
       { $set: { stripeSubscriptionId, endedAt: null, deleteAt: null } },
     );
+    // „Gefunden" zählt (nicht „geändert"): Bei einer Wiederholung ist der Wert schon gesetzt.
+    const { matchedCount, n } = result as { matchedCount?: number; n?: number };
+    return (matchedCount ?? n ?? 0) > 0;
   },
   async markEnded(stripeSubscriptionId, endedAt) {
     const result = await DonationSubscriberModel.updateOne(

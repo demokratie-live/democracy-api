@@ -1,15 +1,15 @@
 import express, { type ErrorRequestHandler, type RequestHandler, type Router } from 'express';
 import type Stripe from 'stripe';
-import { loadDonationConfig, type DonationConfig } from './config';
+import { DonationConfigError, keyMode, loadDonationConfig, type DonationConfig } from './config';
 import { DonationError } from './errors';
 import { createAccountAlertHandlers } from './handlers/accountAlerts';
 import { createMonthlyHandlers } from './handlers/monthly';
 import { createOneTimeHandlers } from './handlers/oneTime';
 import { donationLog } from './log';
-import { createMailer, type Mailer } from './mail/mailer';
+import { createMailer, restrictToTestRecipients, type Mailer } from './mail/mailer';
 import { mongoSubscriberStore, type SubscriberStore } from './models/DonationSubscriber';
 import { mongoWebhookEventStore, type WebhookEventStore } from './models/DonationWebhookEvent';
-import { createPaymentRateLimiter } from './rateLimit';
+import { createManageRateLimiter, createPaymentRateLimiter } from './rateLimit';
 import { configRoute } from './routes/config';
 import { createManageRoutes } from './routes/manage';
 import { monthlyRoute } from './routes/monthly';
@@ -98,12 +98,14 @@ export const createDonationsRouter = (deps: DonationsDeps): Router => {
     stripe ? monthlyRoute({ config, stripe, subscribers: deps.subscribers }) : unavailable,
   );
 
-  // Verwalten (Spender-Schlüssel nötig): ohne Rate-Limit und ohne Kill-Switch – Kündigen muss immer gehen.
+  // Verwalten (Spender-Schlüssel nötig): ohne Kill-Switch – Kündigen muss immer gehen. Eigenes, großzügiges
+  // Rate-Limit, damit niemand über diese Endpunkte das (mit DonorBox geteilte) Stripe-Kontingent erschöpft.
   const manage = stripe ? createManageRoutes({ config, stripe, subscribers: deps.subscribers }) : null;
-  router.get('/monthly', manage?.get ?? unavailable);
-  router.patch('/monthly', manage?.update ?? unavailable);
-  router.delete('/monthly', manage?.cancel ?? unavailable);
-  router.post('/monthly/portal-session', manage?.portalSession ?? unavailable);
+  const manageLimiter = createManageRateLimiter();
+  router.get('/monthly', manageLimiter, manage?.get ?? unavailable);
+  router.patch('/monthly', manageLimiter, manage?.update ?? unavailable);
+  router.delete('/monthly', manageLimiter, manage?.cancel ?? unavailable);
+  router.post('/monthly/portal-session', manageLimiter, manage?.portalSession ?? unavailable);
 
   // Unbekannte Pfade enden hier und laufen nie in Auth-Middleware oder GraphQL weiter.
   router.use((_req, res) => {
@@ -114,19 +116,39 @@ export const createDonationsRouter = (deps: DonationsDeps): Router => {
   return router;
 };
 
-/** Baut das Modul aus den Umgebungsvariablen. Wirft bei ungültiger Konfiguration (fail fast). */
+/** Antwortet auf alles mit `503 donations_disabled` – die App zeigt dann nur Bankverbindung/Status. */
+const createDisabledRouter = (): Router => {
+  const router = express.Router();
+  router.use((_req, res) => sendError(res, new DonationError('donations_disabled')));
+  return router;
+};
+
+/**
+ * Baut das Modul aus den Umgebungsvariablen. Eine ungültige Spenden-Konfiguration darf nie die ganze
+ * API (Abstimmungen, GraphQL) lahmlegen: Dann wird das Modul deaktiviert und der Fehler geloggt.
+ */
 export const createDonationsRouterFromEnv = (): Router => {
+  try {
+    return buildFromEnv();
+  } catch (error) {
+    donationLog.error('Spendenmodul deaktiviert – Konfiguration ungültig', {
+      code: error instanceof DonationConfigError ? error.problems.join('; ') : ((error as Error)?.name ?? 'unknown'),
+    });
+    return createDisabledRouter();
+  }
+};
+
+const buildFromEnv = (): Router => {
   const config = loadDonationConfig();
   const stripe = config.stripe.secretKey ? createStripeClient(config.stripe.secretKey) : null;
-  if (config.enabled && !config.mail.smtpUrl) {
-    donationLog.warn('SMTP_URL fehlt – Spendenbestätigungen werden nicht versendet');
-  }
   if (config.enabled && !config.receipt.exemption) {
     donationLog.warn(
       'DONATION_RECEIPT_EXEMPTION fehlt – Bestätigungen verweisen nur auf den Gemeinnützigkeitsnachweis',
     );
   }
-  const mailer = createMailer(config.mail);
+  const smtpMailer = createMailer(config.mail);
+  const testMode = keyMode(config.stripe.secretKey) !== 'live';
+  const mailer = testMode ? restrictToTestRecipients(smtpMailer, config.mail.testRecipients) : smtpMailer;
   donationLog.info(config.enabled ? 'Spendenmodul aktiv' : 'Spendenmodul deaktiviert (DONATIONS_ENABLED=false)');
   return createDonationsRouter({
     config,

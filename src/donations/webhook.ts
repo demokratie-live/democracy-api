@@ -59,7 +59,9 @@ export const createWebhookHandler =
       }
       event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret) as Stripe.Event;
     } catch {
-      donationLog.warn('Webhook mit ungültiger Signatur abgelehnt', { code: 'invalid_signature' });
+      // info statt warn: unsignierte Anfragen von außen sollen nicht das MongoDB-Log füllen (warn+).
+      // Ein falsch konfiguriertes Secret fällt trotzdem auf – Stripe meldet fehlschlagende Zustellungen.
+      donationLog.info('Webhook mit ungültiger Signatur abgelehnt', { code: 'invalid_signature' });
       const error = new DonationError('invalid_signature');
       res.status(error.status).json(error.toBody());
       return;
@@ -68,8 +70,9 @@ export const createWebhookHandler =
     const meta = { eventId: event.id, eventType: event.type };
 
     // Die Form der Event-Objekte hängt von der API-Version des Endpoints ab (z. B. `invoice.parent`
-    // erst ab „basil"). Bei abweichender Version laut ablehnen statt still zu ignorieren – Stripe
-    // stellt erneut zu, sobald der Endpoint auf die richtige Version umgestellt ist.
+    // erst ab „basil"). Bei abweichender Version laut ablehnen statt still falsch zu verarbeiten.
+    // Achtung: Stripe-Retries behalten die ursprüngliche Version – so abgelehnte Events sind verloren.
+    // Den Endpoint deshalb VOR dem Einschalten mit der richtigen Version anlegen (docs/DONATIONS.md §2.4).
     if (event.api_version && event.api_version !== STRIPE_API_VERSION) {
       donationLog.error('Webhook mit falscher Stripe-API-Version abgelehnt – Endpoint umstellen', {
         ...meta,
@@ -88,12 +91,20 @@ export const createWebhookHandler =
 
     let claimed = false;
     try {
-      claimed = await eventStore.claim(event.id, event.type);
-      if (!claimed) {
+      const claim = await eventStore.claim(event.id, event.type);
+      if (claim === 'done') {
         res.json({ received: true, duplicate: true });
         return;
       }
+      if (claim === 'busy') {
+        // Wird gerade parallel verarbeitet: kein 2xx, damit Stripe später erneut zustellt – falls die
+        // laufende Verarbeitung scheitert, geht das Event so nicht verloren.
+        res.status(409).json({ received: false, inProgress: true });
+        return;
+      }
+      claimed = true;
       await handler(event);
+      await eventStore.complete(event.id);
       donationLog.info('Webhook verarbeitet', meta);
       res.json({ received: true });
     } catch (error) {

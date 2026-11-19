@@ -17,16 +17,24 @@ export const testEnv = {
   STRIPE_DONATION_PRODUCT_ID: 'prod_test',
   STRIPE_PAYMENT_METHOD_CONFIGURATION_ID: 'pmc_test',
   STRIPE_PORTAL_LOGIN_URL: 'https://billing.stripe.com/p/login/test_abc',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test',
+  SMTP_URL: 'smtp://127.0.0.1:2525',
 };
 
 export const createMemoryEventStore = () => {
   const claimed = new Set<string>();
-  const store: WebhookEventStore & { claimed: Set<string> } = {
+  const done = new Set<string>();
+  const store: WebhookEventStore & { claimed: Set<string>; done: Set<string> } = {
     claimed,
+    done,
     async claim(eventId) {
-      if (claimed.has(eventId)) return false;
+      if (done.has(eventId)) return 'done';
+      if (claimed.has(eventId)) return 'busy';
       claimed.add(eventId);
-      return true;
+      return 'claimed';
+    },
+    async complete(eventId) {
+      done.add(eventId);
     },
     async release(eventId) {
       claimed.delete(eventId);
@@ -45,18 +53,27 @@ export const createMemorySubscriberStore = (initial: DonationSubscriber[] = []) 
       const entry = entries.get(keyHash);
       return entry ? { ...entry } : null;
     },
-    async upsert(keyHash, stripeCustomerId) {
+    async insert(keyHash, stripeCustomerId) {
       const existing = entries.get(keyHash);
-      const entry: DonationSubscriber = existing
-        ? { ...existing, stripeCustomerId, endedAt: null }
-        : { id: `sub-entry-${nextId++}`, keyHash, stripeCustomerId, stripeSubscriptionId: null, endedAt: null };
+      if (existing) return { ...existing };
+      const entry: DonationSubscriber = {
+        id: `sub-entry-${nextId++}`,
+        keyHash,
+        stripeCustomerId,
+        stripeSubscriptionId: null,
+        endedAt: null,
+      };
       entries.set(keyHash, entry);
       return { ...entry };
     },
-    async setSubscription(id, stripeSubscriptionId) {
+    async linkSubscription(id, stripeSubscriptionId, expected) {
       for (const entry of entries.values()) {
-        if (entry.id === id) Object.assign(entry, { stripeSubscriptionId, endedAt: null });
+        if (entry.id === id && entry.stripeSubscriptionId === expected) {
+          Object.assign(entry, { stripeSubscriptionId, endedAt: null });
+          return true;
+        }
       }
+      return false;
     },
     async markEnded(stripeSubscriptionId, endedAt) {
       for (const entry of entries.values()) {

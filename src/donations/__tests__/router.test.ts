@@ -1,4 +1,7 @@
+import express from 'express';
+import type { AddressInfo } from 'net';
 import { afterEach, describe, it, expect } from 'vitest';
+import { createDonationsRouterFromEnv } from '../index';
 import { hashClientKey } from '../rateLimit';
 import { buildDeps, startServer, testEnv, readJson } from './helpers';
 
@@ -26,18 +29,36 @@ describe('Donations-Router', () => {
     }
   });
 
-  it('begrenzt Zahlungsversuche auf 10 je 10 Minuten', async () => {
+  it('begrenzt Zahlungsversuche auf 30 je 10 Minuten', async () => {
     const server = await startServer(buildDeps());
     close = server.close;
 
     const statuses: number[] = [];
-    for (let i = 0; i < 11; i += 1) {
+    for (let i = 0; i < 31; i += 1) {
       statuses.push((await postJson(`${server.url}/one-time`, '{}')).status);
     }
-    expect(statuses.slice(0, 10).every((status) => status !== 429)).toBe(true);
+    expect(statuses.slice(0, 30).every((status) => status !== 429)).toBe(true);
     const limited = await postJson(`${server.url}/one-time`, '{}');
-    expect(statuses[10]).toBe(429);
+    expect(statuses[30]).toBe(429);
     expect((await readJson(limited)).error.code).toBe('rate_limited');
+  });
+
+  it('deaktiviert das Modul bei ungültiger Konfiguration, statt die ganze API abstürzen zu lassen', async () => {
+    const previous = process.env.DONATION_FEE_CARD_PCT;
+    process.env.DONATION_FEE_CARD_PCT = '1,5';
+    try {
+      const app = express();
+      app.use('/donations/v1', createDonationsRouterFromEnv());
+      const server = app.listen(0);
+      close = () => new Promise<void>((resolve) => server.close(() => resolve()));
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/donations/v1/config`);
+      expect(response.status).toBe(503);
+      expect((await readJson(response)).error.code).toBe('donations_disabled');
+    } finally {
+      if (previous === undefined) delete process.env.DONATION_FEE_CARD_PCT;
+      else process.env.DONATION_FEE_CARD_PCT = previous;
+    }
   });
 
   it('beantwortet ungültiges JSON mit 400 invalid_request', async () => {
