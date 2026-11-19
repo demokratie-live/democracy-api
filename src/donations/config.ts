@@ -33,6 +33,8 @@ export interface DonationConfig {
      */
     paymentMethodConfigurationId: string | null;
     portalLoginUrl: string | null;
+    /** Eigene Kundenportal-Konfiguration (bpc_…) für Sessions aus der App (Phase 5). */
+    portalConfigurationId: string | null;
   };
   merchantDisplayName: string;
   merchantCountryCode: 'DE';
@@ -117,6 +119,7 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       donationProductId: nonEmpty(env.STRIPE_DONATION_PRODUCT_ID),
       paymentMethodConfigurationId: nonEmpty(env.STRIPE_PAYMENT_METHOD_CONFIGURATION_ID),
       portalLoginUrl: nonEmpty(env.STRIPE_PORTAL_LOGIN_URL),
+      portalConfigurationId: nonEmpty(env.STRIPE_PORTAL_CONFIGURATION_ID),
     },
     merchantDisplayName: nonEmpty(env.DONATION_MERCHANT_DISPLAY_NAME) ?? 'DEMOCRACY Deutschland e.V.',
     merchantCountryCode: 'DE',
@@ -205,6 +208,9 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
   }
   if (config.stripe.paymentMethodConfigurationId && !config.stripe.paymentMethodConfigurationId.startsWith('pmc_')) {
     problems.push('STRIPE_PAYMENT_METHOD_CONFIGURATION_ID muss mit pmc_ beginnen');
+  }
+  if (config.stripe.portalConfigurationId && !config.stripe.portalConfigurationId.startsWith('bpc_')) {
+    problems.push('STRIPE_PORTAL_CONFIGURATION_ID muss mit bpc_ beginnen');
   }
 
   if (problems.length > 0) {

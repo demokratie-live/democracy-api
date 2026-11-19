@@ -73,6 +73,7 @@ describe('loadDonationConfig', () => {
     [{ DONATION_MIN_CENTS: '2000', DONATION_MAX_CENTS: '1000' }, 'DONATION_MAX_CENTS'],
     [{ DONATION_PRESETS_MONTHLY: '100,500' }, 'außerhalb'],
     [{ STRIPE_PAYMENT_METHOD_CONFIGURATION_ID: 'card,sepa_debit' }, 'pmc_'],
+    [{ STRIPE_PORTAL_CONFIGURATION_ID: 'portal' }, 'bpc_'],
     [{ DONATION_DEFAULT_INTERVAL: 'weekly' }, 'DONATION_DEFAULT_INTERVAL'],
     [{ DONATION_MIN_CENTS: '5,00' }, 'ganze Zahl'],
   ])('meldet ungültige Werte (%o)', (env, fragment) => {

@@ -47,6 +47,17 @@ Wirksam nach Rollout der ConfigMap; die App cacht `/config` max. 5 Minuten.
 
 Status je Schritt hier abhaken und Datum/Person eintragen.
 
+**Test-Umgebung:** die Sandbox **„Test-Modus"** des Kontos DEMOCRACY (Kontoauswahl oben links;
+Dashboard-Links mit `/test/`). Stripe CLI: eigenes Profil `democracy`
+(`stripe login --project-name democracy`, danach Befehle mit `stripe -p democracy …`).
+
+**Wichtig:** Diese Test-Sandbox teilt laut Stripe manche Dashboard-Einstellungen mit dem Live-Modus.
+Objekte (Products, Schlüssel, Webhooks, Portal-Konfigurationen) sind getrennt – Einstellungsseiten
+ohne Test-Hinweis wirken dagegen ggf. auch live. In Sandboxes verschickt Stripe keine E-Mails an
+Kund:innen; die kontoweiten Einstellungen 2.5 (Billing-Mails/Retries), 2.7 (Branding) und
+2.8 (Radar) werden deshalb erst bei der Live-Einrichtung bewusst gesetzt – sie gelten dann auch für
+DonorBox-Zahlungen im selben Konto.
+
 ### 2.1 Zahlungsarten (Zahlungsprofil)
 Die Zahlungsarten steuert ein **Stripe-Zahlungsprofil** (Payment Method Configuration):
 Dashboard → Einstellungen → Zahlungen → Zahlungsmethoden. Die ID (`pmc_…`) kommt in
@@ -77,7 +88,7 @@ stripe products create \
 # → prod_… in STRIPE_DONATION_PRODUCT_ID
 ```
 
-- [ ] Product angelegt (Test): `prod_…`
+- [x] Product angelegt (Test): `prod_VelcsPtIRfzAjq` (2026-11-19, per CLI)
 - [ ] Product angelegt (Live): `prod_…`
 
 ### 2.3 Restricted API Key (statt Secret Key)
@@ -96,10 +107,15 @@ Dashboard → Entwickler → API-Schlüssel → „Eingeschränkten Schlüssel e
 | Customer portal (Billing Portal Sessions) | Schreiben |
 | Mandates | Lesen |
 
-- [ ] Test-Key erzeugt und als Secret hinterlegt (nie in Git, nie im Client)
+- [x] Test-Key erzeugt (2026-11-19); lokal in `.env`, für internal noch ins Cluster-Secret
 - [ ] Live-Key erzeugt und als Secret hinterlegt
 
 ### 2.4 Webhook-Endpoint
+
+Lokal: kein Dashboard-Endpoint nötig – `stripe -p democracy listen --forward-to
+localhost:3000/donations/v1/stripe-webhook`; das Secret liefert `stripe -p democracy listen
+--print-secret` (✓ 2026-11-19 in lokaler `.env`). Den internal-Endpoint erst anlegen, wenn die API mit
+dem Spendenmodul auf internal läuft (sonst deaktiviert Stripe ihn nach Fehlzustellungen).
 Dashboard → Entwickler → Webhooks → Endpoint hinzufügen (URL siehe Tabelle oben), Events:
 
 ```
@@ -135,6 +151,10 @@ Dashboard → Einstellungen → Billing → Kundenportal:
 - [ ] Abonnement aktualisieren / Tarifwechsel: **aus** (Betrag ändert man in der App)
 - [ ] Links: Datenschutz `https://www.democracy-deutschland.de/datenschutz`, Impressum
 - [ ] **Login-Link aktivieren** → URL in `STRIPE_PORTAL_LOGIN_URL` (Test und Live getrennt)
+- Test: eigene Konfiguration „DEMOCRACY App" `bpc_1UdSNXLGpvKcZpqcJ10Y76O7` per API angelegt
+  (Zahlungsart ändern, Rechnungen, E-Mail ändern, Kündigen zum Periodenende, kein Tarifwechsel,
+  Login-Link `https://billing.stripe.com/p/login/test_6oU00k0E10gMcSFd8d1kA00`). Das Standardportal
+  bleibt unverändert. Live analog anlegen → `STRIPE_PORTAL_CONFIGURATION_ID`.
 
 ### 2.7 Branding und Abrechnungstexte
 Dashboard → Einstellungen → Branding / Öffentliche Unternehmensdaten:
