@@ -31,7 +31,7 @@ describe('GET /donations/v1/config', () => {
       portalLoginUrl: 'https://billing.stripe.com/p/login/test_abc',
       bankTransfer: { holder: 'DEMOCRACY Deutschland e.V.', iban: 'DE83 2605 0001 0056 1290 91', bic: 'NOLADE21GOE' },
       legal: {
-        privacyUrl: 'https://www.democracy-deutschland.de/datenschutz',
+        privacyUrl: 'https://democracy-deutschland.de/datenschutz/',
         nonprofitProofUrl: 'https://www.democracy-deutschland.de/files/download/Gemeinnutzigkeit_DEMOCRACY.pdf',
         simplifiedReceiptUrl:
           'https://www.democracy-deutschland.de/files/download/Vereinfachter_Zuwendungsnachweis.pdf',

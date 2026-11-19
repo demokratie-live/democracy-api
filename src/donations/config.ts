@@ -154,7 +154,7 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       bic: nonEmpty(env.DONATION_BANK_BIC) ?? 'NOLADE21GOE',
     },
     legal: {
-      privacyUrl: nonEmpty(env.DONATION_PRIVACY_URL) ?? 'https://www.democracy-deutschland.de/datenschutz',
+      privacyUrl: nonEmpty(env.DONATION_PRIVACY_URL) ?? 'https://democracy-deutschland.de/datenschutz/',
       nonprofitProofUrl:
         nonEmpty(env.DONATION_NONPROFIT_PROOF_URL) ??
         'https://www.democracy-deutschland.de/files/download/Gemeinnutzigkeit_DEMOCRACY.pdf',
