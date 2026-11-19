@@ -14,6 +14,7 @@ export const testEnv = {
   STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy',
   STRIPE_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
   STRIPE_DONATION_PRODUCT_ID: 'prod_test',
+  STRIPE_PAYMENT_METHOD_CONFIGURATION_ID: 'pmc_test',
   STRIPE_PORTAL_LOGIN_URL: 'https://billing.stripe.com/p/login/test_abc',
 };
 

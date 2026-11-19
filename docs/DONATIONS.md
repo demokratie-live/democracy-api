@@ -47,15 +47,25 @@ Wirksam nach Rollout der ConfigMap; die App cacht `/config` max. 5 Minuten.
 
 Status je Schritt hier abhaken und Datum/Person eintragen.
 
-### 2.1 Zahlungsarten
-Dashboard → Einstellungen → Zahlungsmethoden:
+### 2.1 Zahlungsarten (Zahlungsprofil)
+Die Zahlungsarten steuert ein **Stripe-Zahlungsprofil** (Payment Method Configuration):
+Dashboard → Einstellungen → Zahlungen → Zahlungsmethoden. Die ID (`pmc_…`) kommt in
+`STRIPE_PAYMENT_METHOD_CONFIGURATION_ID`.
 
-- [ ] Karten, **Apple Pay**, **Google Pay** aktiv
-- [ ] **SEPA-Lastschrift** aktiv
-- [ ] **PayPal** aktiv: PayPal-Geschäftskonto des Vereins verknüpfen; Abwicklung „über Stripe";
-      **wiederkehrende Zahlungen** beantragen (Freigabe durch PayPal, kann dauern). Erst nach
-      Freigabe `paypal` in `DONATION_METHODS_MONTHLY` ergänzen.
-- [ ] **Link** deaktiviert (vereinfacht das Zahlungsfenster)
+- Test-Modus: Profil **„Donation Test"** `pmc_1LBwvYLGpvKcZpqce4bG1PuO` ✓ (2026-11-19)
+- Live: eigenes Profil anlegen und hier eintragen: `pmc_…`
+
+In jedem Profil:
+
+- [ ] Karten, **Apple Pay**, **Google Pay** an
+- [ ] **SEPA-Lastschrift** an
+- [ ] **PayPal** an: PayPal-Geschäftskonto des Vereins verknüpfen; Abwicklung „über Stripe";
+      **wiederkehrende Zahlungen** bei PayPal beantragen (Freigabe kann dauern)
+- [ ] **Klarna** und **Link** aus (sonst erscheinen sie in der App)
+- [ ] Das Profil ist das **Standardprofil** des Kontos. Pflicht: Das App-SDK und Stripe-Abos
+      (Dauerspenden) nutzen technisch immer das Standardprofil; nur Einzelspenden bekommen die ID
+      explizit. Das von DonorBox verwaltete Plattform-Profil („Default", mit Plattform-Anwendung)
+      ist davon getrennt und bleibt unverändert.
 
 ### 2.2 Product für Dauerspenden
 Preise werden **inline** je Subscription erzeugt (`price_data`), es braucht nur ein Product:

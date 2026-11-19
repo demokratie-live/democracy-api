@@ -7,10 +7,6 @@
  */
 
 export type DonationInterval = 'one_time' | 'monthly';
-export type DonationPaymentMethodType = 'card' | 'sepa_debit' | 'paypal';
-
-const PAYMENT_METHOD_TYPES: readonly DonationPaymentMethodType[] = ['card', 'sepa_debit', 'paypal'];
-
 /** Stripe-Mindestbetrag für EUR-Zahlungen in Cent. */
 const STRIPE_MIN_CHARGE_CENTS = 50;
 
@@ -30,6 +26,12 @@ export interface DonationConfig {
     publishableKey: string | null;
     webhookSecret: string | null;
     donationProductId: string | null;
+    /**
+     * Stripe-Zahlungsprofil (pmc_…), das die Zahlungsarten steuert. Wird bei Einzelspenden übergeben.
+     * Abos (Dauerspenden) und das App-SDK nutzen technisch bedingt das Standardprofil des Kontos –
+     * dieses Profil muss daher das Standardprofil sein (docs/DONATIONS.md).
+     */
+    paymentMethodConfigurationId: string | null;
     portalLoginUrl: string | null;
   };
   merchantDisplayName: string;
@@ -38,7 +40,6 @@ export interface DonationConfig {
   minAmountCents: number;
   maxAmountCents: number;
   presets: Record<DonationInterval, number[]>;
-  paymentMethodTypes: Record<DonationInterval, DonationPaymentMethodType[]>;
   fees: DonationFeeConfig;
   bankTransfer: { holder: string; iban: string; bic: string };
   legal: { privacyUrl: string; nonprofitProofUrl: string; simplifiedReceiptUrl: string };
@@ -91,23 +92,6 @@ const parseIntegerList = (env: Env, key: string, fallback: number[], problems: s
   return parts.map(Number);
 };
 
-const parseMethods = (
-  env: Env,
-  key: string,
-  fallback: DonationPaymentMethodType[],
-  problems: string[],
-): DonationPaymentMethodType[] => {
-  const raw = nonEmpty(env[key]);
-  if (raw === null) return fallback;
-  const parts = raw.split(',').map((part) => part.trim());
-  const unknown = parts.filter((part) => !PAYMENT_METHOD_TYPES.includes(part as DonationPaymentMethodType));
-  if (unknown.length > 0 || parts.length === 0) {
-    problems.push(`${key} enthält unbekannte Zahlungsarten: ${unknown.join(', ')}`);
-    return fallback;
-  }
-  return Array.from(new Set(parts)) as DonationPaymentMethodType[];
-};
-
 const keyMode = (key: string | null): 'test' | 'live' | null => {
   if (!key) return null;
   if (/^(sk|rk|pk)_test_/.test(key)) return 'test';
@@ -131,6 +115,7 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       publishableKey: nonEmpty(env.STRIPE_PUBLISHABLE_KEY),
       webhookSecret: nonEmpty(env.STRIPE_WEBHOOK_SECRET),
       donationProductId: nonEmpty(env.STRIPE_DONATION_PRODUCT_ID),
+      paymentMethodConfigurationId: nonEmpty(env.STRIPE_PAYMENT_METHOD_CONFIGURATION_ID),
       portalLoginUrl: nonEmpty(env.STRIPE_PORTAL_LOGIN_URL),
     },
     merchantDisplayName: nonEmpty(env.DONATION_MERCHANT_DISPLAY_NAME) ?? 'DEMOCRACY Deutschland e.V.',
@@ -141,10 +126,6 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
     presets: {
       one_time: parseIntegerList(env, 'DONATION_PRESETS_ONE_TIME', [1000, 2500, 5000, 10000], problems),
       monthly: parseIntegerList(env, 'DONATION_PRESETS_MONTHLY', [500, 1000, 1500, 2500], problems),
-    },
-    paymentMethodTypes: {
-      one_time: parseMethods(env, 'DONATION_METHODS_ONE_TIME', ['card', 'sepa_debit', 'paypal'], problems),
-      monthly: parseMethods(env, 'DONATION_METHODS_MONTHLY', ['card', 'sepa_debit'], problems),
     },
     fees: {
       cardPct: parseNumber(env, 'DONATION_FEE_CARD_PCT', 1.5, problems),
@@ -199,6 +180,7 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
       ['STRIPE_PUBLISHABLE_KEY', config.stripe.publishableKey],
       ['STRIPE_WEBHOOK_SECRET', config.stripe.webhookSecret],
       ['STRIPE_DONATION_PRODUCT_ID', config.stripe.donationProductId],
+      ['STRIPE_PAYMENT_METHOD_CONFIGURATION_ID', config.stripe.paymentMethodConfigurationId],
     ];
     for (const [key, value] of required) {
       if (!value) problems.push(`${key} fehlt, obwohl DONATIONS_ENABLED=true`);
@@ -220,6 +202,9 @@ export const loadDonationConfig = (env: Env = process.env): DonationConfig => {
   }
   if (config.stripe.donationProductId && !config.stripe.donationProductId.startsWith('prod_')) {
     problems.push('STRIPE_DONATION_PRODUCT_ID muss mit prod_ beginnen');
+  }
+  if (config.stripe.paymentMethodConfigurationId && !config.stripe.paymentMethodConfigurationId.startsWith('pmc_')) {
+    problems.push('STRIPE_PAYMENT_METHOD_CONFIGURATION_ID muss mit pmc_ beginnen');
   }
 
   if (problems.length > 0) {

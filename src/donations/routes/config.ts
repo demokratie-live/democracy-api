@@ -14,7 +14,6 @@ const publicDonationConfig = (config: DonationConfig) => ({
   minAmountCents: config.minAmountCents,
   maxAmountCents: config.maxAmountCents,
   presets: config.presets,
-  paymentMethodTypes: config.paymentMethodTypes,
   fees: config.fees,
   portalLoginUrl: config.stripe.portalLoginUrl,
   bankTransfer: config.bankTransfer,

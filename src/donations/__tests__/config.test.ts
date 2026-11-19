@@ -27,7 +27,6 @@ describe('GET /donations/v1/config', () => {
       minAmountCents: 500,
       maxAmountCents: 100000,
       presets: { one_time: [1000, 2500, 5000, 10000], monthly: [500, 1000, 1500, 2500] },
-      paymentMethodTypes: { one_time: ['card', 'sepa_debit', 'paypal'], monthly: ['card', 'sepa_debit'] },
       fees: { cardPct: 1.5, cardFixedCents: 25, sepaFixedCents: 35, billingPct: 0.7 },
       portalLoginUrl: 'https://billing.stripe.com/p/login/test_abc',
       bankTransfer: { holder: 'DEMOCRACY Deutschland e.V.', iban: 'DE83 2605 0001 0056 1290 91', bic: 'NOLADE21GOE' },
