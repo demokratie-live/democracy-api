@@ -72,7 +72,7 @@ In jedem Profil:
 - [ ] **SEPA-Lastschrift** an
 - [ ] **PayPal** an: PayPal-Geschäftskonto des Vereins verknüpfen; Abwicklung „über Stripe";
       **wiederkehrende Zahlungen** bei PayPal beantragen (Freigabe kann dauern)
-- [ ] **Klarna** und **Link** aus (sonst erscheinen sie in der App)
+- [ ] **Klarna**, **Link**, **Giropay** und **Sofort** aus (sonst erscheinen sie in der App; Spike T009)
 - [ ] Das Profil ist das **Standardprofil** des Kontos. Pflicht: Das App-SDK und Stripe-Abos
       (Dauerspenden) nutzen technisch immer das Standardprofil; nur Einzelspenden bekommen die ID
       explizit. Das von DonorBox verwaltete Plattform-Profil („Default", mit Plattform-Anwendung)

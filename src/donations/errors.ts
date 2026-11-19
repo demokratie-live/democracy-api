@@ -17,8 +17,6 @@ export type DonationErrorCode =
   | 'not_found'
   | 'not_active'
   | 'subscription_exists'
-  | 'subscription_pending'
-  | 'payment_pending'
   | 'rate_limited'
   | 'donations_disabled'
   | 'invalid_signature'
@@ -39,8 +37,6 @@ const MESSAGES: Record<DonationErrorCode, string> = {
   not_found: 'Es wurde keine Dauerspende gefunden.',
   not_active: 'Diese Dauerspende ist nicht aktiv.',
   subscription_exists: 'Du hast bereits eine aktive Dauerspende. Du kannst sie unter „Dauerspende verwalten" ändern.',
-  subscription_pending: 'Deine erste Spende wird gerade eingezogen. Bitte versuche es in ein paar Tagen erneut.',
-  payment_pending: 'Deine erste Spende wird gerade eingezogen. Danach kannst du die Dauerspende ändern oder kündigen.',
   rate_limited: 'Zu viele Versuche. Bitte warte ein paar Minuten.',
   donations_disabled: 'Spenden in der App sind gerade nicht möglich. Du kannst gerne per Überweisung spenden.',
   invalid_signature: 'Ungültige Signatur.',
@@ -53,8 +49,6 @@ const STATUS: Partial<Record<DonationErrorCode, number>> = {
   not_found: 404,
   not_active: 409,
   subscription_exists: 409,
-  subscription_pending: 409,
-  payment_pending: 409,
   idempotency_conflict: 409,
   rate_limited: 429,
   donations_disabled: 503,
