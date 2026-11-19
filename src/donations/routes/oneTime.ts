@@ -36,6 +36,8 @@ export const oneTimeRoute =
             payment_method: input.paymentMethodId,
             payment_method_configuration: config.stripe.paymentMethodConfigurationId ?? undefined,
             automatic_payment_methods: { enabled: true },
+            // Muss zur `captureMethod` der App (PaymentSheet intentConfiguration) passen – das SDK prüft das.
+            capture_method: 'automatic_async',
             description: `Spende an ${config.receipt.organization}`,
             statement_descriptor_suffix: 'SPENDE',
             metadata: {
